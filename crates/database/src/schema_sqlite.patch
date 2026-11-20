@@ -1,4 +1,15 @@
-@@ -4,7 +4,7 @@
+@@ -6,8 +6,8 @@
+         user_id -> Integer,
+         name -> Text,
+         key_hash -> Text,
+-        created_at -> Timestamp,
+-        last_used_at -> Nullable<Timestamp>,
++        created_at -> TimestamptzSqlite,
++        last_used_at -> Nullable<TimestamptzSqlite>,
+     }
+ }
+ 
+@@ -15,7 +15,7 @@
      expired_posts (feed_id, url) {
          feed_id -> Integer,
          url -> Text,
@@ -7,7 +18,7 @@
      }
  }
  
-@@ -13,7 +13,7 @@
+@@ -24,7 +24,7 @@
          feed_id -> Integer,
          data -> Nullable<Binary>,
          content_type -> Nullable<Text>,
@@ -16,7 +27,7 @@
      }
  }
  
-@@ -25,17 +25,20 @@
+@@ -36,17 +36,20 @@
  }
  
  diesel::table! {
@@ -40,7 +51,7 @@
          last_error -> Nullable<Text>,
          etag -> Nullable<Text>,
          last_modified -> Nullable<Text>,
-@@ -50,13 +53,16 @@
+@@ -63,13 +66,16 @@
  }
  
  diesel::table! {
@@ -56,10 +67,10 @@
          secret -> Text,
 -        created_at -> Timestamp,
 +        created_at -> TimestamptzSqlite,
+         user_id -> Integer,
      }
  }
- 
-@@ -66,10 +72,10 @@
+@@ -87,10 +93,10 @@
          title -> Nullable<Text>,
          url -> Nullable<Text>,
          authors -> Nullable<Text>,
@@ -69,10 +80,10 @@
          content -> Nullable<Text>,
 -        archived_at -> Timestamp,
 +        archived_at -> TimestamptzSqlite,
+         user_id -> Integer,
      }
  }
- 
-@@ -80,14 +86,14 @@
+@@ -102,14 +108,14 @@
          title -> Nullable<Text>,
          url -> Nullable<Text>,
          authors -> Nullable<Text>,
@@ -90,7 +101,7 @@
          thumbnail_url -> Nullable<Text>,
      }
  }
-@@ -95,12 +101,15 @@
+@@ -117,13 +123,16 @@
  diesel::table! {
      sessions (token_hash) {
          token_hash -> Text,
@@ -98,6 +109,7 @@
 -        last_seen_at -> Timestamp,
 +        expires_at -> TimestamptzSqlite,
 +        last_seen_at -> TimestamptzSqlite,
+         user_id -> Integer,
      }
  }
  
@@ -108,7 +120,7 @@
      settings (is_singleton) {
          is_singleton -> Bool,
          page_size -> Integer,
-@@ -109,7 +118,7 @@
+@@ -132,7 +141,7 @@
          http_connect_timeout -> Integer,
          http_retries -> Integer,
          http_user_agent -> Nullable<Text>,
@@ -117,7 +129,13 @@
          expire_read_after_days -> Nullable<Integer>,
          expire_unread_after_days -> Nullable<Integer>,
          read_delay_secs -> Integer,
-@@ -125,13 +134,16 @@
+@@ -155,18 +164,21 @@
+         password_hash -> Nullable<Text>,
+         oidc_subject -> Nullable<Text>,
+         is_admin -> Bool,
+-        created_at -> Timestamp,
++        created_at -> TimestamptzSqlite,
+     }
  }
  
  diesel::table! {
@@ -133,6 +151,6 @@
          payload_template -> Nullable<Text>,
 -        created_at -> Timestamp,
 +        created_at -> TimestamptzSqlite,
+         user_id -> Integer,
      }
  }
- 

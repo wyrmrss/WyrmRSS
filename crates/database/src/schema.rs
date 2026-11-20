@@ -19,6 +19,17 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    api_keys (id) {
+        id -> Int4,
+        user_id -> Int4,
+        name -> Text,
+        key_hash -> Text,
+        created_at -> Timestamptz,
+        last_used_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
     expired_posts (feed_id, url) {
         feed_id -> Int4,
         url -> Text,
@@ -60,6 +71,7 @@ diesel::table! {
         last_error -> Nullable<Text>,
         etag -> Nullable<Text>,
         last_modified -> Nullable<Text>,
+        user_id -> Int4,
     }
 }
 
@@ -67,6 +79,7 @@ diesel::table! {
     folders (id) {
         id -> Int4,
         name -> Text,
+        user_id -> Int4,
     }
 }
 
@@ -81,6 +94,7 @@ diesel::table! {
         name -> Text,
         secret -> Text,
         created_at -> Timestamptz,
+        user_id -> Int4,
     }
 }
 
@@ -101,6 +115,7 @@ diesel::table! {
         description -> Nullable<Text>,
         content -> Nullable<Text>,
         archived_at -> Timestamptz,
+        user_id -> Int4,
     }
 }
 
@@ -128,6 +143,7 @@ diesel::table! {
         token_hash -> Text,
         expires_at -> Timestamptz,
         last_seen_at -> Timestamptz,
+        user_id -> Int4,
     }
 }
 
@@ -152,9 +168,21 @@ diesel::table! {
 }
 
 diesel::table! {
-    shortcut_overrides (shortcut_action) {
+    shortcut_overrides (user_id, shortcut_action) {
         shortcut_action -> Text,
         key -> Text,
+        user_id -> Int4,
+    }
+}
+
+diesel::table! {
+    users (id) {
+        id -> Int4,
+        username -> Text,
+        password_hash -> Nullable<Text>,
+        oidc_subject -> Nullable<Text>,
+        is_admin -> Bool,
+        created_at -> Timestamptz,
     }
 }
 
@@ -169,17 +197,27 @@ diesel::table! {
         kind -> WebhookKind,
         payload_template -> Nullable<Text>,
         created_at -> Timestamptz,
+        user_id -> Int4,
     }
 }
 
+diesel::joinable!(api_keys -> users (user_id));
 diesel::joinable!(expired_posts -> feeds (feed_id));
 diesel::joinable!(feed_icons -> feeds (feed_id));
 diesel::joinable!(feed_webhooks -> feeds (feed_id));
 diesel::joinable!(feed_webhooks -> webhooks (webhook_id));
 diesel::joinable!(feeds -> folders (folder_id));
+diesel::joinable!(feeds -> users (user_id));
+diesel::joinable!(folders -> users (user_id));
+diesel::joinable!(host_credentials -> users (user_id));
+diesel::joinable!(post_archive -> users (user_id));
 diesel::joinable!(posts -> feeds (feed_id));
+diesel::joinable!(sessions -> users (user_id));
+diesel::joinable!(shortcut_overrides -> users (user_id));
+diesel::joinable!(webhooks -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    api_keys,
     expired_posts,
     feed_icons,
     feed_webhooks,
@@ -192,5 +230,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     sessions,
     settings,
     shortcut_overrides,
+    users,
     webhooks,
 );
