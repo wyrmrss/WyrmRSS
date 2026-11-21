@@ -83,11 +83,15 @@ pub struct Feed {
 }
 
 impl Feed {
+    #[diesel::dsl::auto_type(no_type_alias)]
+    pub(crate) fn owned(user_id: UserId) -> _ {
+        feeds::table.filter(feeds::user_id.eq(user_id))
+    }
+
     pub async fn get(pool: &DatabasePool, user_id: UserId, id: FeedId) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
-        feeds::table
+        Self::owned(user_id)
             .find(id)
-            .filter(feeds::user_id.eq(user_id))
             .select(Feed::as_select())
             .first(&mut conn)
             .await
@@ -107,8 +111,7 @@ impl Feed {
 
     pub async fn get_all_for_user(pool: &DatabasePool, user_id: UserId) -> WyrmResult<Vec<Self>> {
         let mut conn = pool.get().await?;
-        feeds::table
-            .filter(feeds::user_id.eq(user_id))
+        Self::owned(user_id)
             .select(Self::as_select())
             .load(&mut conn)
             .await
@@ -158,9 +161,7 @@ impl Feed {
             let expected_url = form.expected_url.take();
             let expected_filters = form.expected_filters.take();
 
-            let target = feeds::table
-                .find(form.id)
-                .filter(feeds::user_id.eq(form.user_id));
+            let target = Self::owned(form.user_id).find(form.id);
 
             let mut query = diesel::update(target)
                 .set((form, folder_id.map(|f| feeds::folder_id.eq(f))))
@@ -197,8 +198,7 @@ impl Feed {
 
     pub async fn delete(pool: &DatabasePool, user_id: UserId, id: FeedId) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
-        let target = feeds::table.find(id).filter(feeds::user_id.eq(user_id));
-        diesel::delete(target)
+        diesel::delete(Self::owned(user_id).find(id))
             .returning(Self::as_returning())
             .get_result(&mut conn)
             .await
