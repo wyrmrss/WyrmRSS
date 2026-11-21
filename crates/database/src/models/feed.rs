@@ -83,19 +83,32 @@ pub struct Feed {
 }
 
 impl Feed {
-    pub async fn get(pool: &DatabasePool, id: FeedId) -> WyrmResult<Self> {
+    pub async fn get(pool: &DatabasePool, user_id: UserId, id: FeedId) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
         feeds::table
             .find(id)
+            .filter(feeds::user_id.eq(user_id))
             .select(Feed::as_select())
             .first(&mut conn)
             .await
             .map_err(WyrmError::from)
     }
 
+    /// Every user's feeds, for the background worker. Handlers use
+    /// [`get_all_for_user`](Self::get_all_for_user).
     pub async fn get_all(pool: &DatabasePool) -> WyrmResult<Vec<Self>> {
         let mut conn = pool.get().await?;
         feeds::table
+            .select(Self::as_select())
+            .load(&mut conn)
+            .await
+            .map_err(WyrmError::from)
+    }
+
+    pub async fn get_all_for_user(pool: &DatabasePool, user_id: UserId) -> WyrmResult<Vec<Self>> {
+        let mut conn = pool.get().await?;
+        feeds::table
+            .filter(feeds::user_id.eq(user_id))
             .select(Self::as_select())
             .load(&mut conn)
             .await
@@ -145,7 +158,11 @@ impl Feed {
             let expected_url = form.expected_url.take();
             let expected_filters = form.expected_filters.take();
 
-            let mut query = diesel::update(feeds::table.find(form.id))
+            let target = feeds::table
+                .find(form.id)
+                .filter(feeds::user_id.eq(form.user_id));
+
+            let mut query = diesel::update(target)
                 .set((form, folder_id.map(|f| feeds::folder_id.eq(f))))
                 .returning(Feed::as_returning())
                 .into_boxed();
@@ -178,9 +195,10 @@ impl Feed {
         Ok(())
     }
 
-    pub async fn delete(pool: &DatabasePool, id: FeedId) -> WyrmResult<Self> {
+    pub async fn delete(pool: &DatabasePool, user_id: UserId, id: FeedId) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
-        diesel::delete(feeds::table.find(id))
+        let target = feeds::table.find(id).filter(feeds::user_id.eq(user_id));
+        diesel::delete(target)
             .returning(Self::as_returning())
             .get_result(&mut conn)
             .await
@@ -222,7 +240,6 @@ pub struct FeedInsertForm {
 #[diesel(check_for_backend(crate::Backend))]
 pub struct FeedUpdateForm {
     pub id: FeedId,
-    /// Owner, used to resolve the folder name. Never written.
     #[diesel(skip_update)]
     pub user_id: UserId,
     pub title: Option<String>,
@@ -329,14 +346,14 @@ mod tests {
         let pool = setup_test_db().await;
         let created = test_feed!(&pool);
 
-        let got = Feed::get(&pool, created.id)
+        let got = Feed::get(&pool, created.user_id, created.id)
             .await
             .expect("get should succeed");
         assert_eq!(got.id, created.id);
         assert_eq!(got.url, created.url);
         assert_eq!(got.ttl, created.ttl);
 
-        Feed::delete(&pool, created.id)
+        Feed::delete(&pool, created.user_id, created.id)
             .await
             .expect("should delete feed");
     }
@@ -381,7 +398,7 @@ mod tests {
         // A `None` field is left unchanged.
         assert_eq!(updated.url, feed.url);
 
-        Feed::delete(&pool, feed.id)
+        Feed::delete(&pool, feed.user_id, feed.id)
             .await
             .expect("should delete feed");
         Folder::delete(&pool, UserId(1), folder.id)
@@ -394,11 +411,11 @@ mod tests {
         let pool = setup_test_db().await;
         let feed = test_feed!(&pool);
 
-        let deleted = Feed::delete(&pool, feed.id)
+        let deleted = Feed::delete(&pool, feed.user_id, feed.id)
             .await
             .expect("delete should succeed");
         assert_eq!(deleted.id, feed.id);
-        assert!(Feed::get(&pool, feed.id).await.is_err());
+        assert!(Feed::get(&pool, feed.user_id, feed.id).await.is_err());
     }
 
     #[tokio::test]
@@ -409,7 +426,7 @@ mod tests {
         let all = Feed::get_all(&pool).await.expect("get_all should succeed");
         assert!(all.iter().any(|f| f.id == feed.id));
 
-        Feed::delete(&pool, feed.id)
+        Feed::delete(&pool, feed.user_id, feed.id)
             .await
             .expect("should delete feed");
     }
@@ -450,13 +467,17 @@ mod tests {
             .await
             .expect("clear should succeed");
 
-        let https_feed = Feed::get(&pool, https_feed.id).await.expect("should get");
-        let rsshub_feed = Feed::get(&pool, rsshub_feed.id).await.expect("should get");
+        let https_feed = Feed::get(&pool, https_feed.user_id, https_feed.id)
+            .await
+            .expect("should get");
+        let rsshub_feed = Feed::get(&pool, rsshub_feed.user_id, rsshub_feed.id)
+            .await
+            .expect("should get");
         assert_eq!(https_feed.etag.as_deref(), Some("\"v1\""));
         assert!(rsshub_feed.etag.is_none());
 
         for feed in [https_feed, rsshub_feed] {
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
         }
