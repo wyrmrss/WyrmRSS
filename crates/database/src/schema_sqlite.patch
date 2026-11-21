@@ -1,15 +1,4 @@
-@@ -6,8 +6,8 @@
-         user_id -> Integer,
-         name -> Text,
-         key_hash -> Text,
--        created_at -> Timestamp,
--        last_used_at -> Nullable<Timestamp>,
-+        created_at -> TimestamptzSqlite,
-+        last_used_at -> Nullable<TimestamptzSqlite>,
-     }
- }
- 
-@@ -15,7 +15,7 @@
+@@ -4,7 +4,7 @@
      expired_posts (feed_id, url) {
          feed_id -> Integer,
          url -> Text,
@@ -18,7 +7,7 @@
      }
  }
  
-@@ -24,7 +24,7 @@
+@@ -13,7 +13,7 @@
          feed_id -> Integer,
          data -> Nullable<Binary>,
          content_type -> Nullable<Text>,
@@ -27,7 +16,7 @@
      }
  }
  
-@@ -36,17 +36,20 @@
+@@ -25,17 +25,20 @@
  }
  
  diesel::table! {
@@ -51,7 +40,7 @@
          last_error -> Nullable<Text>,
          etag -> Nullable<Text>,
          last_modified -> Nullable<Text>,
-@@ -63,13 +66,16 @@
+@@ -52,13 +55,16 @@
  }
  
  diesel::table! {
@@ -70,7 +59,7 @@
          user_id -> Integer,
      }
  }
-@@ -87,10 +93,10 @@
+@@ -76,10 +82,10 @@
          title -> Nullable<Text>,
          url -> Nullable<Text>,
          authors -> Nullable<Text>,
@@ -83,7 +72,7 @@
          user_id -> Integer,
      }
  }
-@@ -102,14 +108,14 @@
+@@ -91,14 +97,14 @@
          title -> Nullable<Text>,
          url -> Nullable<Text>,
          authors -> Nullable<Text>,
@@ -101,7 +90,7 @@
          thumbnail_url -> Nullable<Text>,
      }
  }
-@@ -117,13 +123,16 @@
+@@ -106,13 +112,16 @@
  diesel::table! {
      sessions (token_hash) {
          token_hash -> Text,
@@ -120,7 +109,7 @@
      settings (is_singleton) {
          is_singleton -> Bool,
          page_size -> Integer,
-@@ -132,7 +141,7 @@
+@@ -121,7 +130,7 @@
          http_connect_timeout -> Integer,
          http_retries -> Integer,
          http_user_agent -> Nullable<Text>,
@@ -129,7 +118,7 @@
          expire_read_after_days -> Nullable<Integer>,
          expire_unread_after_days -> Nullable<Integer>,
          read_delay_secs -> Integer,
-@@ -155,18 +164,21 @@
+@@ -144,18 +153,21 @@
          password_hash -> Nullable<Text>,
          oidc_subject -> Nullable<Text>,
          is_admin -> Bool,
