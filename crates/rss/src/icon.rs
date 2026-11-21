@@ -16,7 +16,6 @@ use database::{
         feed::Feed,
         feed_icon::{FeedIcon, FeedIconInsertForm},
     },
-    newtypes::FeedId,
 };
 use scraper::{Html, Selector};
 use tracing::warn;
@@ -28,10 +27,10 @@ const MAX_ICON_BYTES: usize = 256 * 1024;
 /// How long a "checked, nothing found" result suppresses re-resolution.
 const RETRY_MISSING_AFTER: Duration = Duration::days(7);
 
-/// True when `feed_id` has no icon row yet, or its last check found nothing
+/// True when `feed` has no icon row yet, or its last check found nothing
 /// more than [`RETRY_MISSING_AFTER`] ago. False on a database error.
-pub async fn needs_feed_icon(pool: &DatabasePool, feed_id: FeedId) -> bool {
-    match FeedIcon::get(pool, feed_id).await {
+pub async fn needs_feed_icon(pool: &DatabasePool, feed: &Feed) -> bool {
+    match FeedIcon::get(pool, feed.user_id, feed.id).await {
         Ok(existing) => existing.is_none_or(|icon| {
             icon.data.is_none() && Utc::now() - icon.checked_at >= RETRY_MISSING_AFTER
         }),

@@ -220,9 +220,9 @@ async fn fetch_and_store(
 ) -> WyrmResult<Option<HttpValidators>> {
     let fetch_target = resolver.resolve(&task.feed.url)?;
 
-    let current = Feed::get(pool, task.feed.id).await?;
+    let current = Feed::get(pool, task.feed.user_id, task.feed.id).await?;
 
-    let needs_icon = icon::needs_feed_icon(pool, task.feed.id).await;
+    let needs_icon = icon::needs_feed_icon(pool, &task.feed).await;
 
     let validators = if needs_icon {
         HttpValidators::default() // Fetch the body so the icon can be resolved.
