@@ -38,6 +38,7 @@ export const ENDPOINTS = {
   },
   instance: {
     get: () => `${apiBase()}/instance`,
+    setup: () => `${apiBase()}/instance/setup`,
   },
   feeds: {
     list: () => `${apiBase()}/feeds`,

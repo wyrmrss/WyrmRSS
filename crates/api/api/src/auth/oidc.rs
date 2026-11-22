@@ -63,9 +63,7 @@ pub async fn callback(
         Ok((return_to, authenticated)) => {
             response.insert_header((header::LOCATION, return_to));
 
-            if let Some(cookie) = authenticated.cookie {
-                response.cookie(cookie);
-            }
+            authenticated.set_cookie(&mut response);
         }
         Err(error) => {
             tracing::warn!(%error, "OIDC login failed");

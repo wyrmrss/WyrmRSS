@@ -23,8 +23,8 @@ pub async fn middleware(
         .app_data::<web::Data<Auth>>()
         .expect("auth data configured");
 
-    // No auth configured or a valid API key: nothing to check.
-    if !auth.enabled() || api_key::valid(req.request(), auth) {
+    // A valid API key: nothing more to check.
+    if api_key::valid(req.request(), auth) {
         return next.call(req).await;
     }
 

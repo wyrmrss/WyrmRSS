@@ -7,6 +7,7 @@ pub mod middleware;
 pub mod oidc;
 pub mod password;
 pub mod session;
+pub mod username;
 
 #[cfg(feature = "oidc")]
 use crate::oidc::Oidc;
@@ -58,11 +59,6 @@ impl Auth {
             methods.push(AuthMethod::Oidc);
         }
         methods
-    }
-
-    /// True when any sign-in method is configured; otherwise access is open.
-    pub(crate) fn enabled(&self) -> bool {
-        self.api_key.is_some() || self.oidc_enabled()
     }
 
     /// True when OIDC is compiled in and configured.
@@ -122,18 +118,16 @@ mod tests {
     }
 
     #[test]
-    fn no_methods_configured_leaves_access_open() {
+    fn no_methods_configured_lists_none_and_has_no_sessions() {
         let auth = Auth::new(&WyrmStartupConfig::default()).expect("valid config");
         assert!(auth.methods().is_empty());
-        assert!(!auth.enabled());
         assert!(auth.sessions().is_none());
     }
 
     #[test]
-    fn api_key_alone_enables_auth() {
+    fn api_key_alone_is_the_only_method() {
         let auth = Auth::new(&api_key_config()).expect("valid config");
         assert!(matches!(auth.methods().as_slice(), [AuthMethod::ApiKey]));
-        assert!(auth.enabled());
     }
 
     #[cfg(feature = "oidc")]
@@ -148,10 +142,9 @@ mod tests {
 
     #[cfg(feature = "oidc")]
     #[test]
-    fn oidc_alone_enables_auth() {
+    fn oidc_alone_is_the_only_method() {
         let auth = Auth::new(&oidc_config()).expect("valid config");
         assert!(matches!(auth.methods().as_slice(), [AuthMethod::Oidc]));
-        assert!(auth.enabled());
         assert!(auth.oidc().is_ok());
     }
 }

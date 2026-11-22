@@ -1,7 +1,15 @@
-use crate::{DatabaseConn, DatabasePool, schema, schema::local_instance};
+use crate::{
+    DatabaseConn, DatabasePool,
+    models::local_user::{LocalUser, LocalUserUpdateForm},
+    newtypes::UserId,
+    schema::{self, local_instance},
+};
 use diesel::{Selectable, deserialize::Queryable, prelude::*};
-use diesel_async::RunQueryDsl;
-use wyrm_utils::{error::WyrmError, result::WyrmResult};
+use diesel_async::{AsyncConnection, RunQueryDsl};
+use wyrm_utils::{
+    error::{DatabaseError::Conflict, WyrmError},
+    result::WyrmResult,
+};
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = schema::local_instance)]
@@ -29,5 +37,30 @@ impl LocalInstance {
                 .execute(conn)
                 .await?;
         Ok(updated == 1)
+    }
+
+    /// Marks the instance as set up and gives the admin (user 1) their username and password,
+    /// both or neither. Fails with a conflict if the instance is already set up.
+    pub async fn complete_setup(
+        pool: &DatabasePool,
+        username: String,
+        password_hash: String,
+    ) -> WyrmResult<LocalUser> {
+        let mut pool = pool.get().await?;
+        let conn = &mut *pool;
+
+        conn.transaction(async |conn| {
+            if !Self::claim_setup(conn).await? {
+                return Err(WyrmError::Database(Conflict(
+                    "instance already set up".to_string(),
+                )));
+            }
+            let form = LocalUserUpdateForm {
+                username: Some(username),
+                password_hash: Some(password_hash),
+            };
+            LocalUser::update(conn, UserId(1), form).await
+        })
+        .await
     }
 }

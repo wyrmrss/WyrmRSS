@@ -1,5 +1,5 @@
 use actix_web::{
-    HttpRequest,
+    HttpRequest, HttpResponseBuilder,
     cookie::{Cookie, SameSite, time::Duration as CookieDuration},
     http::header,
 };
@@ -37,6 +37,15 @@ pub struct Authenticated {
     pub user_id: UserId,
     /// (Re-)issued session cookie: set when the session was just created or its expiry extended.
     pub cookie: Option<Cookie<'static>>,
+}
+
+impl Authenticated {
+    /// Adds the session cookie to a handler's response, if one was issued.
+    pub fn set_cookie(self, response: &mut HttpResponseBuilder) {
+        if let Some(cookie) = self.cookie {
+            response.cookie(cookie);
+        }
+    }
 }
 
 impl SessionManager {

@@ -1,6 +1,5 @@
 use actix_web::{
-    HttpResponse,
-    error,
+    HttpResponse, error,
     http::{StatusCode, header::ContentType},
 };
 use diesel::result::DatabaseErrorKind;
@@ -19,6 +18,8 @@ pub enum AuthError {
     LoginFailed(String),
     #[error("password hashing failed: {0}")]
     PasswordHashing(String),
+    #[error("invalid setup token")]
+    InvalidSetupToken,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -157,6 +158,10 @@ impl WyrmError {
             WyrmError::WebhookTemplate(msg) => msg,
             WyrmError::EmptyFolderName => "folder name cannot be empty",
             WyrmError::FeedDiscovery(msg) => msg,
+            WyrmError::Auth(AuthError::InvalidAuthConfig(_)) => {
+                "authentication is misconfigured on the server, see the server logs"
+            }
+            WyrmError::Auth(AuthError::InvalidSetupToken) => "invalid setup token",
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => "not found",
             WyrmError::Auth(AuthError::CsrfCheckFailed) => "csrf check failed",
             WyrmError::Auth(AuthError::LoginFailed(_)) => "login failed",
@@ -165,6 +170,16 @@ impl WyrmError {
             }
             WyrmError::InvalidInput(msg) => msg,
             _ => "internal server error",
+        }
+    }
+
+    /// Fixed name the frontend can match on. Unlike the message, it never gets reworded.
+    /// This is useful when returning a 403 to the frontend due to the instance running
+    /// in demo mode, where 403's can also be returned for other reasons.
+    fn code(&self) -> Option<&'static str> {
+        match self {
+            WyrmError::DemoRestricted => Some("demo_restricted"),
+            _ => None,
         }
     }
 
@@ -194,10 +209,13 @@ impl error::ResponseError for WyrmError {
         } else {
             tracing::debug!("{self}");
         }
-        let body = serde_json::json!({ "error": self.client_message() }).to_string();
+        let mut body = serde_json::json!({ "error": self.client_message() });
+        if let Some(code) = self.code() {
+            body["code"] = code.into();
+        }
         HttpResponse::build(status)
             .insert_header(ContentType::json())
-            .body(body)
+            .body(body.to_string())
     }
 
     fn status_code(&self) -> StatusCode {
@@ -210,6 +228,7 @@ impl error::ResponseError for WyrmError {
             WyrmError::WebhookTemplate(_) => StatusCode::BAD_REQUEST,
             WyrmError::EmptyFolderName => StatusCode::BAD_REQUEST,
             WyrmError::FeedDiscovery(_) => StatusCode::BAD_REQUEST,
+            WyrmError::Auth(AuthError::InvalidSetupToken) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => StatusCode::NOT_FOUND,
             WyrmError::Auth(AuthError::CsrfCheckFailed) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::LoginFailed(_)) => StatusCode::UNAUTHORIZED,
