@@ -3,7 +3,8 @@
 /**
  * Controls when posts are marked as read.
  * - `OnOpen`: automatically marked read when opened in the reader.
+ * - `OnScroll`: marked read when scrolled past in the post list, or when opened.
  * - `Manually`: only marked read via the toggle button.
  * - `Disabled`: read state is never updated; all posts appear as read.
  */
-export type ReadMode = "on_open" | "manually" | "disabled";
+export type ReadMode = "on_open" | "on_scroll" | "manually" | "disabled";

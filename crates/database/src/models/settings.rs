@@ -7,6 +7,7 @@ use wyrm_utils::{error::WyrmError, result::WyrmResult};
 
 /// Controls when posts are marked as read.
 /// - `OnOpen`: automatically marked read when opened in the reader.
+/// - `OnScroll`: marked read when scrolled past in the post list, or when opened.
 /// - `Manually`: only marked read via the toggle button.
 /// - `Disabled`: read state is never updated; all posts appear as read.
 #[derive(Clone, Debug, DbEnum, Serialize, Deserialize, ts_rs::TS)]
@@ -22,6 +23,7 @@ use wyrm_utils::{error::WyrmError, result::WyrmResult};
 #[ts(rename_all = "snake_case", export)]
 pub enum ReadMode {
     OnOpen,
+    OnScroll,
     Manually,
     Disabled,
 }

@@ -19,6 +19,7 @@ import { archivePost, markPostsRead, unarchivePost, updatePost } from "../api/po
 import { feedKeys, setFeedUnreadCount } from "../cache/feeds";
 import { postKeys, setPostArchived, setPostRead, setPostBookmarked } from "../cache/posts";
 import type { PostId } from "../types/PostId";
+import type { MarkReadTarget } from "../types/MarkReadTarget";
 
 export function useArchivePost() {
   const queryClient = useQueryClient();
@@ -49,16 +50,21 @@ export function useSetPostRead() {
 }
 
 /**
- * Bulk mark-as-read: everything, one feed, or one folder. Unlike the
- * single-post mutations there is no cache patching — arbitrarily many rows
- * across many lists change, so refetch instead (feeds carry the badges).
+ * Bulk mark-as-read: everything, one feed, one folder, or a list of posts.
+ * A list of posts is patched in the cache, so the posts stay in place in an
+ * unread-only list. The others change too many rows to patch, so they refetch.
+ * Feeds are always refetched for the unread badges.
  */
 export function useMarkRead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: markPostsRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: postKeys.all });
+    onSuccess: (_, target: MarkReadTarget) => {
+      if (target !== "all" && "posts" in target) {
+        for (const postId of target.posts) setPostRead(queryClient, postId, true);
+      } else {
+        queryClient.invalidateQueries({ queryKey: postKeys.all });
+      }
       queryClient.invalidateQueries({ queryKey: feedKeys.all });
     },
   });
