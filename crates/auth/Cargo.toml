@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 actix-web = { workspace = true, features = ["secure-cookies"] }
+argon2 = { workspace = true }
 chrono = { workspace = true }
 database = { path = "../database", default-features = false }
 getrandom = { workspace = true }

@@ -1,13 +1,13 @@
+use crate::{
+    DatabaseConn,
+    DatabasePool,
+    newtypes::UserId,
+    schema::{self, local_users},
+};
 use chrono::{DateTime, Utc};
 use diesel::{Selectable, deserialize::Queryable, prelude::*};
 use diesel_async::RunQueryDsl;
 use wyrm_utils::{error::WyrmError, result::WyrmResult};
-
-use crate::{
-    DatabaseConn, DatabasePool,
-    newtypes::UserId,
-    schema::{self, local_users},
-};
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = schema::local_users)]
@@ -63,7 +63,8 @@ impl LocalUser {
             .map_err(WyrmError::from)
     }
 
-    /// Takes a connection so callers can run it inside a transaction, e.g. setup with `claim_setup`.
+    /// Takes a connection so callers can run it inside a transaction, e.g. setup with
+    /// `claim_setup`.
     pub async fn update(
         conn: &mut DatabaseConn,
         id: UserId,

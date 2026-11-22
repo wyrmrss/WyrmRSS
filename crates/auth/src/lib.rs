@@ -5,6 +5,7 @@ mod http;
 pub mod middleware;
 #[cfg(feature = "oidc")]
 pub mod oidc;
+pub mod password;
 pub mod session;
 
 #[cfg(feature = "oidc")]

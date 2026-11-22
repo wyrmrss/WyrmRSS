@@ -17,6 +17,8 @@ pub enum AuthError {
     CsrfCheckFailed,
     #[error("login failed: {0}")]
     LoginFailed(String),
+    #[error("password hashing failed: {0}")]
+    PasswordHashing(String),
 }
 
 #[derive(thiserror::Error, Debug)]
