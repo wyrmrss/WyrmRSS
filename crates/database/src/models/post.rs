@@ -15,6 +15,17 @@ use feed_rs::model::Entry;
 use serde::{Deserialize, Serialize};
 use wyrm_utils::{error::WyrmError, result::WyrmResult, thumbnail::extract_thumbnail_url};
 
+/// Which posts [`Post::mark_read`] marks as read.
+#[derive(Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case", export)]
+pub enum MarkReadTarget {
+    All,
+    Feed(FeedId),
+    Folder(FolderId),
+    Posts(Vec<PostId>),
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Queryable, Selectable)]
 #[diesel(table_name = crate::schema::posts)]
@@ -193,16 +204,24 @@ impl Post {
             .map_err(WyrmError::from)
     }
 
-    pub async fn mark_many_as_read(
-        pool: &DatabasePool,
-        feed_id: Option<FeedId>,
-        folder_id: Option<FolderId>,
-    ) -> WyrmResult<usize> {
-        match (feed_id, folder_id) {
-            (Some(feed_id), _) => Self::mark_feed_as_read(pool, feed_id).await,
-            (None, Some(folder_id)) => Self::mark_folder_as_read(pool, folder_id).await,
-            (None, None) => Self::mark_all_as_read(pool).await,
+    pub async fn mark_read(pool: &DatabasePool, target: MarkReadTarget) -> WyrmResult<usize> {
+        match target {
+            MarkReadTarget::All => Self::mark_all_as_read(pool).await,
+            MarkReadTarget::Feed(id) => Self::mark_feed_as_read(pool, id).await,
+            MarkReadTarget::Folder(id) => Self::mark_folder_as_read(pool, id).await,
+            MarkReadTarget::Posts(ids) => Self::mark_posts_as_read(pool, ids).await,
         }
+    }
+
+    async fn mark_posts_as_read(pool: &DatabasePool, ids: Vec<PostId>) -> WyrmResult<usize> {
+        let mut conn = pool.get().await?;
+        diesel::update(posts::table)
+            .filter(posts::id.eq_any(ids))
+            .filter(posts::is_read.eq(false))
+            .set(posts::is_read.eq(true))
+            .execute(&mut conn)
+            .await
+            .map_err(WyrmError::from)
     }
 
     async fn mark_all_as_read(pool: &DatabasePool) -> WyrmResult<usize> {
