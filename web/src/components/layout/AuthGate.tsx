@@ -18,6 +18,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (callbackError === "oidc_unavailable") {
       return "The identity provider is unavailable. Try again later.";
     }
+    if (callbackError === "oidc_not_linked") {
+      return "No account is linked to this identity. Sign in with your password and link it from your account settings.";
+    }
+    if (callbackError === "oidc_already_linked") {
+      return "This identity is already linked to another account.";
+    }
     return null;
   });
 

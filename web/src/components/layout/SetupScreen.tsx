@@ -35,7 +35,7 @@ export function SetupScreen() {
     try {
       await setupInstance({ token, username, password });
       // Signed in now: reload so SetupGate sees the finished setup, or continue to OIDC.
-      if (linkOidc) window.location.assign(ENDPOINTS.auth.login());
+      if (linkOidc) window.location.assign(`${ENDPOINTS.auth.login()}?link=true`);
       else window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Setup failed.");

@@ -23,6 +23,8 @@ pub enum AuthError {
     InvalidSetupToken,
     #[error("invalid credentials")]
     InvalidCredentials,
+    #[error("no user linked to OIDC subject {0}")]
+    OidcSubjectNotLinked(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -169,6 +171,9 @@ impl WyrmError {
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => "not found",
             WyrmError::Auth(AuthError::CsrfCheckFailed) => "csrf check failed",
             WyrmError::Auth(AuthError::LoginFailed(_)) => "login failed",
+            WyrmError::Auth(AuthError::OidcSubjectNotLinked(_)) => {
+                "no account is linked to this identity"
+            }
             WyrmError::Auth(AuthError::AuthProviderUnavailable(_)) => {
                 "authentication provider unavailable"
             }
@@ -237,6 +242,7 @@ impl error::ResponseError for WyrmError {
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => StatusCode::NOT_FOUND,
             WyrmError::Auth(AuthError::CsrfCheckFailed) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::LoginFailed(_)) => StatusCode::UNAUTHORIZED,
+            WyrmError::Auth(AuthError::OidcSubjectNotLinked(_)) => StatusCode::UNAUTHORIZED,
             WyrmError::Auth(AuthError::AuthProviderUnavailable(_)) => {
                 StatusCode::SERVICE_UNAVAILABLE
             }

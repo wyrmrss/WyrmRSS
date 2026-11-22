@@ -59,6 +59,7 @@ impl LocalInstance {
             let form = LocalUserUpdateForm {
                 username: Some(username),
                 password_hash: Some(password_hash),
+                oidc_subject: None,
             };
             LocalUser::update(conn, UserId(1), form).await
         })

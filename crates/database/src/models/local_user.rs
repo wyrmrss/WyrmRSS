@@ -85,4 +85,6 @@ pub struct LocalUserUpdateForm {
     pub username: Option<String>,
     /// Argon2 hash.
     pub password_hash: Option<String>,
+    /// The OIDC provider's `sub`. Replaces any subject already linked.
+    pub oidc_subject: Option<String>,
 }
