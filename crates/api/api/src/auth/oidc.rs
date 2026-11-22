@@ -1,6 +1,5 @@
 use actix_web::{
-    HttpRequest,
-    HttpResponse,
+    HttpRequest, HttpResponse,
     http::header,
     web::{Data, Query},
 };
@@ -129,7 +128,7 @@ async fn sign_in(
         };
 
         let mut conn = ctx.db_pool.get().await?;
-        LocalUser::update(&mut conn, authenticated.user_id, form).await?;
+        LocalUser::update(&mut conn, authenticated.user.id, form).await?;
 
         return Ok((return_to, authenticated));
     }
@@ -138,7 +137,7 @@ async fn sign_in(
         .await?
         .ok_or_else(|| AuthError::OidcSubjectNotLinked(subject.clone()))?;
 
-    let authenticated = sessions.create(&ctx.db_pool, user.id).await?;
+    let authenticated = sessions.create(&ctx.db_pool, user).await?;
 
     Ok((return_to, authenticated))
 }

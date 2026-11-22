@@ -38,7 +38,7 @@ pub async fn middleware(
         sessions.check_csrf(req.request())?;
     }
 
-    req.extensions_mut().insert(authenticated.user_id);
+    req.extensions_mut().insert(authenticated.user);
 
     let mut response = next.call(req).await?;
     if let Some(cookie) = authenticated.cookie {

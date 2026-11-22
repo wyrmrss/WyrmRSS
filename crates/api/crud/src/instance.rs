@@ -1,6 +1,5 @@
 use actix_web::{
-    HttpRequest,
-    HttpResponse,
+    HttpRequest, HttpResponse,
     web::{Data, Json},
 };
 use api_utils::context::WyrmContext;
@@ -57,7 +56,7 @@ pub async fn setup(
 
     let admin = LocalInstance::complete_setup(&ctx.db_pool, username, password_hash).await?;
 
-    let authenticated = sessions.create(&ctx.db_pool, admin.id).await?;
+    let authenticated = sessions.create(&ctx.db_pool, admin).await?;
 
     let mut response = HttpResponse::NoContent();
     authenticated.set_cookie(&mut response);

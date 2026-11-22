@@ -1,18 +1,23 @@
 use actix_web::{
-    HttpRequest,
-    HttpResponseBuilder,
+    HttpRequest, HttpResponseBuilder,
     cookie::{Cookie, SameSite, time::Duration as CookieDuration},
     http::header,
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{
     DatabasePool,
-    models::session::{Session, SessionInsertForm},
+    models::{
+        local_user::LocalUser,
+        session::{Session, SessionInsertForm},
+    },
     newtypes::UserId,
 };
 use sha2::{Digest, Sha256};
 use url::Url;
-use wyrm_utils::{error::AuthError, result::WyrmResult};
+use wyrm_utils::{
+    error::{AuthError, DatabaseError, WyrmError},
+    result::WyrmResult,
+};
 
 /// How long a session survives without requests.
 /// User activity extends it, at most once per [`SESSION_REFRESH_INTERVAL`].
@@ -32,10 +37,28 @@ pub struct SessionManager {
     pub secure: bool,
 }
 
+/// The signed-in user. This is what API handlers get from middleware.
+#[derive(Clone)]
+pub struct AuthenticatedUser {
+    pub id: UserId,
+    pub username: String,
+    pub is_admin: bool,
+}
+
+impl From<LocalUser> for AuthenticatedUser {
+    fn from(user: LocalUser) -> Self {
+        Self {
+            id: user.id,
+            username: user.username,
+            is_admin: user.is_admin,
+        }
+    }
+}
+
 /// Outcome of `authenticate`.
 pub struct Authenticated {
     /// Authenticated user.
-    pub user_id: UserId,
+    pub user: AuthenticatedUser,
     /// (Re-)issued session cookie: set when the session was just created or its expiry extended.
     pub cookie: Option<Cookie<'static>>,
 }
@@ -51,7 +74,7 @@ impl Authenticated {
 }
 
 impl SessionManager {
-    pub async fn create(&self, pool: &DatabasePool, user_id: UserId) -> WyrmResult<Authenticated> {
+    pub async fn create(&self, pool: &DatabasePool, user: LocalUser) -> WyrmResult<Authenticated> {
         let token = generate_session_token();
         let now = Utc::now();
         let expires_at = now + SESSION_IDLE_TIMEOUT;
@@ -64,7 +87,7 @@ impl SessionManager {
         Session::create(
             pool,
             SessionInsertForm {
-                user_id,
+                user_id: user.id,
                 token_hash: token_hash(&token),
                 expires_at,
                 last_seen_at: now,
@@ -73,11 +96,18 @@ impl SessionManager {
         .await?;
 
         Ok(Authenticated {
-            user_id,
+            user: user.into(),
             cookie: Some(self.cookie(token, expires_at)),
         })
     }
 
+    /// Finds the active session for the request's cookie and loads its user.
+    /// Returns `None` when there's no cookie, the session expired or was revoked, or its user
+    /// no longer exists.
+    /// Extends the session and reissues the cookie once it's due for a refresh.
+    ///
+    /// Runs two queries per request (session, then user). They could become one join if that
+    /// ever becomes an issue.
     pub async fn authenticate(
         &self,
         pool: &DatabasePool,
@@ -92,11 +122,18 @@ impl SessionManager {
             return Ok(None);
         };
 
+        // A deleted user's leftover session counts as no session.
+        let user = match LocalUser::get(pool, session.user_id).await {
+            Ok(user) => user,
+            Err(WyrmError::Database(DatabaseError::NotFound)) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+
         // Refreshed recently: valid as is, no write needed.
         let now = Utc::now();
         if !needs_refresh(session.last_seen_at, now) {
             return Ok(Some(Authenticated {
-                user_id: session.user_id,
+                user: user.into(),
                 cookie: None,
             }));
         }
@@ -108,7 +145,7 @@ impl SessionManager {
         };
 
         Ok(Some(Authenticated {
-            user_id: session.user_id,
+            user: user.into(),
             cookie: Some(self.cookie(cookie.value().to_owned(), session.expires_at)),
         }))
     }

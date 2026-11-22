@@ -1,6 +1,5 @@
 use actix_web::{
-    HttpRequest,
-    HttpResponse,
+    HttpRequest, HttpResponse,
     http::header,
     web::{Data, Json},
 };
@@ -45,7 +44,7 @@ pub async fn login(
         return Err(AuthError::InvalidCredentials.into());
     };
 
-    let Some(hash) = user.password_hash else {
+    let Some(hash) = &user.password_hash else {
         let _ = hash_password(password).await;
         return Err(AuthError::InvalidCredentials.into());
     };
@@ -54,7 +53,7 @@ pub async fn login(
         return Err(AuthError::InvalidCredentials.into());
     }
 
-    let authenticated = sessions.create(&ctx.db_pool, user.id).await?;
+    let authenticated = sessions.create(&ctx.db_pool, user).await?;
 
     let mut response = HttpResponse::NoContent();
     authenticated.set_cookie(&mut response);
