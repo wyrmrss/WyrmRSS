@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import type { Settings } from "../../types/Settings";
 import type { ReadMode } from "../../types/ReadMode";
+import { marksReadOnOpen } from "../../utils/readMode";
 
 const READ_MODE_OPTIONS: { value: ReadMode; label: string }[] = [
   { value: "on_open", label: "On open" },
+  { value: "on_scroll", label: "On scroll" },
   { value: "manually", label: "Manually" },
   { value: "disabled", label: "Disabled" },
 ];
@@ -57,7 +59,7 @@ function GeneralForm({ initial }: { initial: Settings }) {
           ))}
         </div>
       </div>
-      {readMode === "on_open" && (
+      {marksReadOnOpen(readMode) && (
         <div className="settings-field">
           <label>Mark as read delay</label>
           <input type="number" min={0} value={readDelaySecs} onChange={(e) => setReadDelaySecs(e.target.value)} required />

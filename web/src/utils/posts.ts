@@ -42,3 +42,28 @@ export function groupByDate<T>(items: T[], getDate: (item: T) => string): [strin
   }
   return groups;
 }
+
+/** One row of a date-grouped post list: a date header, a post, or the load-more button. */
+export type PostListRow<T> =
+  | { kind: "header"; label: string; count: number }
+  | { kind: "item"; item: T; isGroupFirst: boolean; isGroupLast: boolean }
+  | { kind: "load-more" };
+
+// Flattens the date groups into rows, since the virtualizer positions one row at a time.
+export function buildPostListRows<T>(
+  items: T[],
+  groupDate: (item: T) => string,
+  hasNextPage: boolean,
+): PostListRow<T>[] {
+  const rows: PostListRow<T>[] = [];
+  for (const [label, groupItems] of groupByDate(items, groupDate)) {
+    rows.push({ kind: "header", label, count: groupItems.length });
+    for (const [index, item] of groupItems.entries()) {
+      const isGroupFirst = index === 0;
+      const isGroupLast = index === groupItems.length - 1;
+      rows.push({ kind: "item", item, isGroupFirst, isGroupLast });
+    }
+  }
+  if (hasNextPage) rows.push({ kind: "load-more" });
+  return rows;
+}

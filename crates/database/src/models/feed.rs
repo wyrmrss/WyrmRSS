@@ -68,6 +68,14 @@ pub struct Feed {
     pub display_mode: DisplayMode,
     /// Curated error from the latest failed poll; cleared on success.
     pub last_error: Option<String>,
+    /// HTTP ETag used to revalidate the feed response.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub etag: Option<String>,
+    /// HTTP Last-Modified value used to revalidate the feed response.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub last_modified: Option<String>,
 }
 
 impl Feed {
@@ -110,11 +118,11 @@ impl Feed {
         .await
     }
 
-    /// Applies the form's `Some` fields. With `expected_url` set (worker polls), it only
-    /// updates if the feed's URL still matches, otherwise returns `NotFound`.
-    /// E.g. the user changes a feed's URL in the UI while a poll of the old URL is in
-    /// flight: the edit resets the fetch state, and the late poll result is discarded
-    /// instead of saving the old URL's fetch time or error on the new URL.
+    /// Applies the form's `Some` fields. With `expected_url`/`expected_filters` set
+    /// (worker polls), it only updates if the feed's URL and filters still match,
+    /// otherwise returns `NotFound`. E.g. the user edits a feed while a poll is in
+    /// flight: the edit resets the fetch state and validators, and the late poll result
+    /// is discarded instead of writing the old poll's fetch time, error or validators.
     pub async fn update(pool: &DatabasePool, mut form: FeedUpdateForm) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
         let conn = &mut *conn;
@@ -126,25 +134,39 @@ impl Feed {
                 Some(folder) => Some(Folder::resolve_name_on(conn, folder.as_deref()).await?),
             };
 
-            let target = feeds::table.find(form.id);
-            let feed = match form.expected_url.take() {
-                Some(url) => {
-                    diesel::update(target.filter(feeds::url.eq(url)))
-                        .set((form, folder_id.map(|f| feeds::folder_id.eq(f))))
-                        .get_result::<Self>(conn)
-                        .await?
-                }
-                None => {
-                    diesel::update(target)
-                        .set((form, folder_id.map(|f| feeds::folder_id.eq(f))))
-                        .get_result::<Self>(conn)
-                        .await?
-                }
-            };
+            let expected_url = form.expected_url.take();
+            let expected_filters = form.expected_filters.take();
+
+            let mut query = diesel::update(feeds::table.find(form.id))
+                .set((form, folder_id.map(|f| feeds::folder_id.eq(f))))
+                .into_boxed();
+
+            if let Some(url) = expected_url {
+                query = query.filter(feeds::url.eq(url));
+            }
+
+            if let Some(filters) = expected_filters {
+                query = query.filter(feeds::filters.eq(filters));
+            }
+
+            let feed = query.get_result::<Self>(conn).await?;
 
             Ok::<Feed, WyrmError>(feed)
         })
         .await
+    }
+
+    /// Clear validators for RSSHub feeds after the configured instance changes.
+    pub async fn clear_rsshub_validators(pool: &DatabasePool) -> WyrmResult<()> {
+        let mut conn = pool.get().await?;
+        diesel::update(feeds::table.filter(feeds::url.like("rsshub://%")))
+            .set((
+                feeds::etag.eq(None::<String>),
+                feeds::last_modified.eq(None::<String>),
+            ))
+            .execute(&mut conn)
+            .await?;
+        Ok(())
     }
 
     pub async fn delete(pool: &DatabasePool, id: FeedId) -> WyrmResult<Self> {
@@ -209,19 +231,26 @@ pub struct FeedUpdateForm {
     /// when the URL changes, so the new URL is polled right away.
     pub last_fetched_at: Option<Option<DateTime<Utc>>>,
     pub last_error: Option<Option<String>>,
+    /// `Some(None)` clears the ETag; `None` leaves it untouched.
+    pub etag: Option<Option<String>>,
+    /// `Some(None)` clears Last-Modified; `None` leaves it untouched.
+    pub last_modified: Option<Option<String>>,
     /// Only apply when the feed's URL still matches; set by the worker so a poll
     /// of a URL that has since been changed is discarded.
     #[diesel(skip_update)]
     pub expected_url: Option<String>,
+    /// Only apply when the feed's fitlers still match; set by the worker so a poll
+    /// of a feed whose filters have since been changed is discarded.
+    #[diesel(skip_update)]
+    pub expected_filters: Option<Filters>,
 }
 
 impl FeedUpdateForm {
     /// Built by the feed worker after each poll: success bumps `last_fetched_at`
     /// and clears the error; failure keeps the last good fetch time and stores the message.
-    pub fn from_poll_result(feed: &Feed, result: &WyrmResult<()>) -> Self {
+    pub fn from_poll_result<T>(feed: &Feed, result: &WyrmResult<T>) -> Self {
         Self {
             id: feed.id,
-            expected_url: Some(feed.url.clone()),
             title: None,
             url: None,
             ttl: None,
@@ -231,6 +260,10 @@ impl FeedUpdateForm {
             display_mode: None,
             last_fetched_at: result.is_ok().then(|| Some(Utc::now())),
             last_error: Some(result.as_ref().err().map(WyrmError::fetch_error_message)),
+            etag: None,
+            last_modified: None,
+            expected_url: Some(feed.url.clone()),
+            expected_filters: Some(feed.filters.clone()),
         }
     }
 }
@@ -310,9 +343,12 @@ mod tests {
                 ttl: Some(120),
                 folder: Some(Some(folder.name.clone())),
                 filters: None,
+                expected_filters: None,
                 is_paused: Some(true),
                 last_fetched_at: None,
                 last_error: None,
+                etag: None,
+                last_modified: None,
                 expected_url: None,
                 display_mode: None,
             },
@@ -358,5 +394,50 @@ mod tests {
         Feed::delete(&pool, feed.id)
             .await
             .expect("should delete feed");
+    }
+
+    #[tokio::test]
+    async fn clear_rsshub_validators_leaves_other_feeds_alone() {
+        let pool = setup_test_db().await;
+        let https_feed = test_feed!(&pool);
+        let rsshub_feed = Feed::create(
+            &pool,
+            FeedInsertForm {
+                title: "rsshub test feed".to_string(),
+                url: format!(
+                    "rsshub://test/{}",
+                    Utc::now()
+                        .timestamp_nanos_opt()
+                        .expect("timestamp in range")
+                ),
+                ttl: 60,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("should create rsshub feed");
+
+        for feed in [&https_feed, &rsshub_feed] {
+            let mut form = FeedUpdateForm::from_poll_result(feed, &Ok(()));
+            form.etag = Some(Some("\"v1\"".into()));
+            Feed::update(&pool, form)
+                .await
+                .expect("should store validators");
+        }
+
+        Feed::clear_rsshub_validators(&pool)
+            .await
+            .expect("clear should succeed");
+
+        let https_feed = Feed::get(&pool, https_feed.id).await.expect("should get");
+        let rsshub_feed = Feed::get(&pool, rsshub_feed.id).await.expect("should get");
+        assert_eq!(https_feed.etag.as_deref(), Some("\"v1\""));
+        assert!(rsshub_feed.etag.is_none());
+
+        for feed in [https_feed, rsshub_feed] {
+            Feed::delete(&pool, feed.id)
+                .await
+                .expect("should delete feed");
+        }
     }
 }

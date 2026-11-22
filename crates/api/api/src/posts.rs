@@ -4,7 +4,10 @@ use actix_web::{
 };
 use api_utils::context::WyrmContext;
 use database::{
-    models::{archive::PostArchive, post::Post},
+    models::{
+        archive::PostArchive,
+        post::{MarkReadTarget, Post},
+    },
     newtypes::{FeedId, FolderId, PostId},
     utils::pagination::{PagedResponse, PaginationCursor},
     views::{archive::get_post_archive_insert_form, post::PostQuery},
@@ -21,13 +24,6 @@ pub struct ListPosts {
     pub bookmarked: Option<bool>,
     pub unread_only: Option<bool>,
     pub search: Option<String>,
-}
-
-#[derive(Deserialize, ts_rs::TS)]
-#[ts(export)]
-pub struct MarkRead {
-    feed_id: Option<FeedId>,
-    folder_id: Option<FolderId>,
 }
 
 pub async fn get(path: Path<PostId>, ctx: Data<WyrmContext>) -> WyrmResult<Json<Post>> {
@@ -50,10 +46,10 @@ pub async fn unarchive(path: Path<PostId>, ctx: Data<WyrmContext>) -> WyrmResult
 }
 
 pub async fn mark_as_read(
-    Json(data): Json<MarkRead>,
+    Json(target): Json<MarkReadTarget>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<HttpResponse> {
-    let _ = Post::mark_many_as_read(&ctx.db_pool, data.feed_id, data.folder_id).await?;
+    let _ = Post::mark_read(&ctx.db_pool, target).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

@@ -42,7 +42,7 @@ export function FeedItem({ feed, active }: Props) {
           {
             icon: <TbChecks />,
             label: "Mark as read",
-            onSelect: () => markRead.mutate({ feed_id: feed.id, folder_id: null }),
+            onSelect: () => markRead.mutate({ feed: feed.id }),
           },
           {
             icon: <TbPencil />,

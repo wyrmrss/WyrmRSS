@@ -9,6 +9,7 @@ import { useShortcutHandler } from "../../hooks/useShortcuts";
 import { ENDPOINTS } from "../../utils/api";
 import { extractYouTubeId, formatDate } from "../../utils/utils";
 import { extractHlsVideo } from "../../utils/hls";
+import { marksReadOnOpen } from "../../utils/readMode";
 import { ReaderPane } from "../layout/ReaderPane";
 import { SanitizedHtml } from "../common/SanitizedHtml";
 import { HlsVideo } from "../common/HlsVideo";
@@ -47,7 +48,7 @@ export function PostReader({ postId, onClose, width }: Props) {
   useEffect(() => {
     if (loadedId === undefined || readMode === undefined || readDelaySecs === undefined) return;
     if (handledPostId.current === loadedId) return;
-    if (isRead || readMode !== "on_open") {
+    if (isRead || !marksReadOnOpen(readMode)) {
       handledPostId.current = loadedId;
       return;
     }
@@ -60,7 +61,7 @@ export function PostReader({ postId, onClose, width }: Props) {
 
   // Opening the original is a clear read signal, so skip the delay.
   function markReadOnOpenOriginal() {
-    if (post && !post.is_read && readMode === "on_open") {
+    if (post && !post.is_read && marksReadOnOpen(readMode)) {
       setRead({ id: post.id, isRead: true });
     }
   }

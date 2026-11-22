@@ -16,6 +16,7 @@ use database::{
         feed::Feed,
         feed_icon::{FeedIcon, FeedIconInsertForm},
     },
+    newtypes::FeedId,
 };
 use scraper::{Html, Selector};
 use tracing::warn;
@@ -27,12 +28,21 @@ const MAX_ICON_BYTES: usize = 256 * 1024;
 /// How long a "checked, nothing found" result suppresses re-resolution.
 const RETRY_MISSING_AFTER: Duration = Duration::days(7);
 
-/// Brings `feed`'s stored icon up to date: resolves and stores one if the
-/// feed was never checked, or a previous check found nothing more than
-/// [`RETRY_MISSING_AFTER`] ago. Best-effort by design — failures are logged,
-/// never propagated, because a missing favicon must not fail feed creation
-/// or a poll. Callers without a parsed feed at hand simply skip the call:
-/// the next poll parses one and lands here anyway.
+/// True when `feed_id` has no icon row yet, or its last check found nothing
+/// more than [`RETRY_MISSING_AFTER`] ago. False on a database error.
+pub async fn needs_feed_icon(pool: &DatabasePool, feed_id: FeedId) -> bool {
+    match FeedIcon::get(pool, feed_id).await {
+        Ok(existing) => existing.is_none_or(|icon| {
+            icon.data.is_none() && Utc::now() - icon.checked_at >= RETRY_MISSING_AFTER
+        }),
+        Err(_) => false,
+    }
+}
+
+/// Resolves `feed`'s icon from `parsed` and stores the result, including
+/// "nothing found". Doesn't check whether it's due; see [`needs_feed_icon`].
+/// Best-effort: failures are logged, never propagated, so a missing favicon
+/// can't fail feed creation or a poll.
 pub async fn ensure_feed_icon(
     pool: &DatabasePool,
     http: &HttpClient,
@@ -40,19 +50,6 @@ pub async fn ensure_feed_icon(
     feed: &Feed,
     parsed: &feed_rs::model::Feed,
 ) {
-    let existing = match FeedIcon::get(pool, feed.id).await {
-        Ok(existing) => existing,
-        Err(_) => return,
-    };
-
-    // Found icons are kept until the feed's URL changes (the row is deleted
-    // then); recent misses wait out the retry window.
-    if existing.is_some_and(|icon| {
-        icon.data.is_some() || Utc::now() - icon.checked_at < RETRY_MISSING_AFTER
-    }) {
-        return;
-    }
-
     let feed_url = match resolver.resolve(&feed.url) {
         Ok(url) => url,
         Err(e) => {
@@ -92,9 +89,9 @@ async fn resolve_icon(
     // The site page the feed links to.
     let page_url = site_url(feed_url, parsed);
     if let Some(page_url) = &page_url
-        && let Ok((bytes, _)) = http.fetch(page_url).await
+        && let Ok(fetched) = http.fetch(page_url).await
     {
-        let body = String::from_utf8_lossy(&bytes);
+        let body = String::from_utf8_lossy(&fetched.body);
         for href in page_icon_candidates(&body) {
             if let Some(icon) = fetch_icon(http, page_url, &href).await {
                 return Some(icon);
@@ -137,14 +134,14 @@ fn page_icon_candidates(html: &str) -> Vec<String> {
 
 async fn fetch_icon(http: &HttpClient, base: &str, href: &str) -> Option<(Vec<u8>, String)> {
     let url = join_url(base, href)?;
-    let (bytes, content_type) = http.fetch(&url).await.ok()?;
-    if bytes.is_empty() || bytes.len() > MAX_ICON_BYTES {
+    let fetched = http.fetch(&url).await.ok()?;
+    if fetched.body.is_empty() || fetched.body.len() > MAX_ICON_BYTES {
         return None;
     }
-    let mime = sniff_image(&bytes)
+    let mime = sniff_image(&fetched.body)
         .map(String::from)
-        .or(content_type.filter(|ct| ct.starts_with("image/")))?;
-    Some((bytes.to_vec(), mime))
+        .or(fetched.content_type.filter(|ct| ct.starts_with("image/")))?;
+    Some((fetched.body.to_vec(), mime))
 }
 
 /// Identifies an image format from its leading bytes.

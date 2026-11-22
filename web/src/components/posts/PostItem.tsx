@@ -13,6 +13,7 @@ import { initials } from "../../utils/posts";
 import { plainTextSnippet } from "../../utils/radar";
 import { CONTENT } from "../../utils/constants";
 import { formatLastFetched } from "../../utils/utils";
+import { marksReadOnOpen } from "../../utils/readMode";
 import { PostThumbnail } from "./PostThumbnail";
 
 export interface FeedMeta {
@@ -73,7 +74,7 @@ export const PostItem = memo(function PostItem({ post, to, active, feed, showFee
       link.rel = "noopener noreferrer";
     }
     link.click();
-    if (!post.is_read && readMode === "on_open") {
+    if (!post.is_read && marksReadOnOpen(readMode)) {
       setRead({ id: post.id, isRead: true });
     }
   }

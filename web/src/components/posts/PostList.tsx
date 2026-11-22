@@ -4,6 +4,8 @@ import { usePosts } from "../../hooks/usePosts";
 import { useUnreadOnly } from "../../hooks/useUnreadOnly";
 import { useFeeds, usePollFeeds } from "../../hooks/useFeeds";
 import { useMarkRead } from "../../hooks/usePostMutations";
+import { useMarkReadOnScroll } from "../../hooks/useMarkReadOnScroll";
+import { useSettings } from "../../hooks/useSettings";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useOpenPostFromRoute } from "../../hooks/useOpenPostFromRoute";
 import { usePostNavigation } from "../../hooks/usePostNavigation";
@@ -13,9 +15,10 @@ import { useIsMobile } from "../../hooks/useIsMobile";
 import { DensityToggle } from "./DensityToggle";
 import { PostItem } from "./PostItem";
 import { PostsToolbar } from "./PostsToolbar";
-import { VirtualGroupedList } from "../common/VirtualGroupedList";
+import { VirtualPostList } from "./VirtualPostList";
 import type { ReaderOutletContext } from "../../pages/ReaderPage";
 import type { FeedId } from "../../types/FeedId";
+import type { MarkReadTarget } from "../../types/MarkReadTarget";
 import type { Post } from "../../types/Post";
 import { postPath } from "../../utils/posts";
 import type { FolderId } from "../../types/FolderId";
@@ -37,6 +40,9 @@ export function PostList() {
   const isMobile = useIsMobile();
 
   const markRead = useMarkRead();
+
+  const { data: settings } = useSettings();
+  const markReadOnScroll = useMarkReadOnScroll(settings?.read_delay_secs ?? 0);
 
   const { search, setSearch, debouncedSearch } = useDebouncedSearch();
 
@@ -65,6 +71,14 @@ export function PostList() {
 
   const pathFor = (post: Post) => postPath(post, feedIdNum, folderIdNum, false);
 
+  // The toolbar's mark-read button acts on what the list shows.
+  const markReadTarget: MarkReadTarget =
+    feedIdNum !== undefined
+      ? { feed: feedIdNum }
+      : folderIdNum !== undefined
+        ? { folder: folderIdNum }
+        : "all";
+
   usePostNavigation({
     items: posts,
     activePostId,
@@ -88,9 +102,9 @@ export function PostList() {
         <DensityToggle />
         <button
           className="posts-refresh-btn"
-          onClick={() => markRead.mutate({ feed_id: feedIdNum ?? null, folder_id: null })}
+          onClick={() => markRead.mutate(markReadTarget)}
           disabled={markRead.isPending}
-          title={feedIdNum !== undefined ? "Mark feed as read" : "Mark all as read"}
+          title="Mark as read"
         >
           <TbChecks />
         </button>
@@ -103,7 +117,7 @@ export function PostList() {
           <TbRefresh className={pollFeeds.isPending || isRefetching ? "spinning" : ""} />
         </button>
       </PostsToolbar>
-      <VirtualGroupedList
+      <VirtualPostList
         items={posts}
         isLoading={isLoading}
         hasNextPage={hasNextPage}
@@ -113,7 +127,8 @@ export function PostList() {
         emptyMessage={unreadOnly && !debouncedSearch ? "All caught up" : "No posts"}
         onRefresh={isMobile ? () => pollFeeds.mutate() : undefined}
         refreshing={pollFeeds.isPending}
-        activeId={activePostId}
+        openPostId={activePostId}
+        onScrolledPast={settings?.read_mode === "on_scroll" ? markReadOnScroll : undefined}
         renderItem={(post) => (
           <PostItem
             post={post}
