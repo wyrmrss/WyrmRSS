@@ -88,7 +88,7 @@ export function PostList() {
         <DensityToggle />
         <button
           className="posts-refresh-btn"
-          onClick={() => markRead.mutate({ feed_id: feedIdNum ?? null, folder_id: null })}
+          onClick={() => markRead.mutate(feedIdNum !== undefined ? { feed: feedIdNum } : "all")}
           disabled={markRead.isPending}
           title={feedIdNum !== undefined ? "Mark feed as read" : "Mark all as read"}
         >

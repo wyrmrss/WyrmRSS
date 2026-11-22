@@ -148,8 +148,7 @@ export function FeedList() {
                     {
                       icon: <TbChecks />,
                       label: "Mark as read",
-                      onSelect: () =>
-                        markRead.mutate({ feed_id: null, folder_id: folder.id }),
+                      onSelect: () => markRead.mutate({ folder: folder.id }),
                     },
                     {
                       icon: <TbEdit />,
