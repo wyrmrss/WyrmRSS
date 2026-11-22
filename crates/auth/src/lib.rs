@@ -14,9 +14,7 @@ use crate::oidc::Oidc;
 use crate::session::SessionManager;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-#[cfg(feature = "oidc")]
-use wyrm_utils::error::AuthError;
-use wyrm_utils::{config::WyrmStartupConfig, result::WyrmResult};
+use wyrm_utils::{config::WyrmStartupConfig, error::AuthError, result::WyrmResult};
 
 /// Sign-in methods enabled on this instance, as reported to the frontend.
 #[derive(Serialize, ts_rs::TS)]
