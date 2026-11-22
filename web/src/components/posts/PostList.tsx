@@ -4,6 +4,8 @@ import { usePosts } from "../../hooks/usePosts";
 import { useUnreadOnly } from "../../hooks/useUnreadOnly";
 import { useFeeds, usePollFeeds } from "../../hooks/useFeeds";
 import { useMarkRead } from "../../hooks/usePostMutations";
+import { useMarkReadOnScroll } from "../../hooks/useMarkReadOnScroll";
+import { useSettings } from "../../hooks/useSettings";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useOpenPostFromRoute } from "../../hooks/useOpenPostFromRoute";
 import { usePostNavigation } from "../../hooks/usePostNavigation";
@@ -38,6 +40,9 @@ export function PostList() {
   const isMobile = useIsMobile();
 
   const markRead = useMarkRead();
+
+  const { data: settings } = useSettings();
+  const markReadOnScroll = useMarkReadOnScroll(settings?.read_delay_secs ?? 0);
 
   const { search, setSearch, debouncedSearch } = useDebouncedSearch();
 
@@ -123,6 +128,7 @@ export function PostList() {
         onRefresh={isMobile ? () => pollFeeds.mutate() : undefined}
         refreshing={pollFeeds.isPending}
         openPostId={activePostId}
+        onScrolledPast={settings?.read_mode === "on_scroll" ? markReadOnScroll : undefined}
         renderItem={(post) => (
           <PostItem
             post={post}

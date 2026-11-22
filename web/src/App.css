@@ -943,11 +943,13 @@ body.reader-resizing {
 
 .settings-field .segmented .segmented-btn {
   flex: 1;
+  padding-inline: 8px;
 }
 
 .segmented-btn {
   padding: 6px 16px;
   font-size: 0.72rem;
+  white-space: nowrap;
   background: none;
   border: none;
   border-right: 1px solid var(--border);

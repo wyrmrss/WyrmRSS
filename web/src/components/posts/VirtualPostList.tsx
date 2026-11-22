@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { TbArrowDown, TbRefresh } from "react-icons/tb";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useScrollToOpenPost } from "../../hooks/useScrollToOpenPost";
+import { useScrolledPastPosts } from "../../hooks/useScrolledPastPosts";
 import { buildPostListRows, type PostListRow } from "../../utils/posts";
 
 interface Props<T> {
@@ -20,6 +21,8 @@ interface Props<T> {
   refreshing?: boolean;
   /** Id of the post open in the reader; the list keeps it in view. */
   openPostId?: number | null;
+  /** Called with the posts you've scrolled past; see `useScrolledPastPosts`. */
+  onScrolledPast?: (items: T[]) => void;
 }
 
 export function VirtualPostList<T extends { id: number }>({
@@ -34,6 +37,7 @@ export function VirtualPostList<T extends { id: number }>({
   onRefresh,
   refreshing = false,
   openPostId,
+  onScrolledPast,
 }: Props<T>) {
   const rows = useMemo(
     () => buildPostListRows(items ?? [], groupDate, hasNextPage ?? false),
@@ -50,6 +54,7 @@ export function VirtualPostList<T extends { id: number }>({
   });
 
   useScrollToOpenPost(virtualizer, rows, openPostId);
+  useScrolledPastPosts(virtualizer, rows, onScrolledPast);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const indicatorRef = useRef<HTMLDivElement>(null);
