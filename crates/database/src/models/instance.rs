@@ -1,5 +1,6 @@
 use crate::{
-    DatabaseConn, DatabasePool,
+    DatabaseConn,
+    DatabasePool,
     models::local_user::{LocalUser, LocalUserUpdateForm},
     newtypes::UserId,
     schema::{self, local_instance},

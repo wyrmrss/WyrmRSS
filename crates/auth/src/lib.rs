@@ -25,6 +25,7 @@ use wyrm_utils::{config::WyrmStartupConfig, result::WyrmResult};
 pub enum AuthMethod {
     ApiKey,
     Oidc,
+    Password,
 }
 
 pub struct Auth {
@@ -58,6 +59,9 @@ impl Auth {
         if self.oidc_enabled() {
             methods.push(AuthMethod::Oidc);
         }
+        if self.sessions.is_some() {
+            methods.push(AuthMethod::Password);
+        }
         methods
     }
 
@@ -78,8 +82,10 @@ impl Auth {
             .ok_or_else(|| AuthError::AuthMethodDisabled("oidc".into()).into())
     }
 
-    pub fn sessions(&self) -> Option<&SessionManager> {
-        self.sessions.as_ref()
+    pub fn sessions(&self) -> WyrmResult<&SessionManager> {
+        self.sessions
+            .as_ref()
+            .ok_or_else(|| AuthError::InvalidAuthConfig("public_url is required".into()).into())
     }
 
     pub fn setup_token(&self) -> Option<&str> {
@@ -118,14 +124,14 @@ mod tests {
     }
 
     #[test]
-    fn no_methods_configured_lists_none_and_has_no_sessions() {
+    fn no_public_url_lists_no_password_and_has_no_sessions() {
         let auth = Auth::new(&WyrmStartupConfig::default()).expect("valid config");
         assert!(auth.methods().is_empty());
-        assert!(auth.sessions().is_none());
+        assert!(auth.sessions().is_err());
     }
 
     #[test]
-    fn api_key_alone_is_the_only_method() {
+    fn api_key_without_public_url_is_the_only_method() {
         let auth = Auth::new(&api_key_config()).expect("valid config");
         assert!(matches!(auth.methods().as_slice(), [AuthMethod::ApiKey]));
     }
@@ -142,9 +148,12 @@ mod tests {
 
     #[cfg(feature = "oidc")]
     #[test]
-    fn oidc_alone_is_the_only_method() {
+    fn oidc_is_listed_with_password() {
         let auth = Auth::new(&oidc_config()).expect("valid config");
-        assert!(matches!(auth.methods().as_slice(), [AuthMethod::Oidc]));
+        assert!(matches!(
+            auth.methods().as_slice(),
+            [AuthMethod::Oidc, AuthMethod::Password]
+        ));
         assert!(auth.oidc().is_ok());
     }
 }

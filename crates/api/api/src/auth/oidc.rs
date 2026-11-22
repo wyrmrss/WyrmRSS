@@ -1,13 +1,12 @@
 use actix_web::{
-    HttpRequest,
-    HttpResponse,
+    HttpRequest, HttpResponse,
     http::header,
     web::{Data, Query},
 };
 use api_utils::context::WyrmContext;
 use database::newtypes::UserId;
 use serde::Deserialize;
-use wyrm_auth::{Auth, session::Authenticated};
+use wyrm_auth::{Auth, oidc::CompletedLogin, session::Authenticated};
 use wyrm_utils::{error::AuthError, result::WyrmResult};
 
 #[derive(Deserialize)]
@@ -89,11 +88,9 @@ async fn sign_in(
         return Err(AuthError::LoginFailed("OIDC: missing state or code".into()).into());
     };
 
-    let return_to = auth.oidc()?.complete_login(req, &state, &code).await?;
+    let CompletedLogin { return_to, .. } = auth.oidc()?.complete_login(req, &state, &code).await?;
 
-    let sessions = auth
-        .sessions()
-        .ok_or_else(|| AuthError::AuthMethodDisabled("sessions".into()))?;
+    let sessions = auth.sessions()?;
 
     // TODO(#372): the user matched by oidc_subject.
     let authenticated = sessions.create(&ctx.db_pool, UserId(1)).await?;

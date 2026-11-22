@@ -1,6 +1,6 @@
 use actix_web::{
+    HttpRequest,
     HttpResponse,
-    http::header,
     web::{Data, Json},
 };
 use api_utils::context::WyrmContext;
@@ -12,11 +12,7 @@ use wyrm_auth::{
     username::normalize_username,
 };
 use wyrm_utils::{
-    error::{
-        AuthError::{self, InvalidSetupToken},
-        DatabaseError::Conflict,
-        WyrmError,
-    },
+    error::{AuthError::InvalidSetupToken, DatabaseError::Conflict, WyrmError},
     result::WyrmResult,
 };
 
@@ -34,10 +30,15 @@ pub struct InstanceSetup {
 /// Sets up a new instance: checks the setup token from the server log, gives the
 /// admin (user 1) a username and password, and signs them in with a session cookie.
 pub async fn setup(
+    req: HttpRequest,
     Json(data): Json<InstanceSetup>,
     auth: Data<Auth>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<HttpResponse> {
+    let sessions = auth.sessions()?;
+
+    sessions.check_csrf(&req)?;
+
     if LocalInstance::get(&ctx.db_pool).await?.is_setup {
         return Err(WyrmError::Database(Conflict(
             "instance already set up".into(),
@@ -47,10 +48,6 @@ pub async fn setup(
     if !auth.setup_token_matches(&data.token) {
         return Err(WyrmError::Auth(InvalidSetupToken));
     }
-
-    let sessions = auth
-        .sessions()
-        .ok_or_else(|| AuthError::InvalidAuthConfig("public_url is required".into()))?;
 
     let username = normalize_username(&data.username)?;
 
@@ -63,8 +60,6 @@ pub async fn setup(
     let authenticated = sessions.create(&ctx.db_pool, admin.id).await?;
 
     let mut response = HttpResponse::NoContent();
-    response.insert_header((header::CACHE_CONTROL, "no-store"));
-
     authenticated.set_cookie(&mut response);
 
     Ok(response.finish())

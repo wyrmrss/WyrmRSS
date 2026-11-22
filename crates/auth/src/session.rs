@@ -1,5 +1,6 @@
 use actix_web::{
-    HttpRequest, HttpResponseBuilder,
+    HttpRequest,
+    HttpResponseBuilder,
     cookie::{Cookie, SameSite, time::Duration as CookieDuration},
     http::header,
 };
@@ -40,8 +41,9 @@ pub struct Authenticated {
 }
 
 impl Authenticated {
-    /// Adds the session cookie to a handler's response, if one was issued.
+    /// Adds the session cookie, if one was issued, and marks the response `no-store`.
     pub fn set_cookie(self, response: &mut HttpResponseBuilder) {
+        response.insert_header((header::CACHE_CONTROL, "no-store"));
         if let Some(cookie) = self.cookie {
             response.cookie(cookie);
         }

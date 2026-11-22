@@ -42,6 +42,13 @@ type ProviderClient = CoreClient<
     EndpointMaybeSet, // userinfo
 >;
 
+/// What a finished OIDC login hands back to the callback.
+pub struct CompletedLogin {
+    pub return_to: String,
+    /// The provider's `sub` claim for this user.
+    pub subject: String,
+}
+
 /// OIDC sign-in: verifies who the user is at the provider; never creates sessions.
 pub struct Oidc {
     /// Client for discovery and token exchange; never follows redirects.
@@ -204,13 +211,13 @@ impl Oidc {
     }
 
     /// Finishes a login: verifies the callback against the login cookie, returns the return_to
-    /// path.
+    /// path and the user's subject.
     pub async fn complete_login(
         &self,
         req: &HttpRequest,
         state: &str,
         code: &str,
-    ) -> WyrmResult<String> {
+    ) -> WyrmResult<CompletedLogin> {
         let cookie = req
             .cookie(self.login_cookie_name())
             .ok_or_else(|| login_failed("missing login cookie"))?;
@@ -250,7 +257,10 @@ impl Oidc {
             return Err(login_failed(format!("subject {subject} not allowed")));
         }
 
-        Ok(pending.return_to)
+        Ok(CompletedLogin {
+            return_to: pending.return_to,
+            subject: subject.to_owned(),
+        })
     }
 
     fn open_login(&self, cookie: Cookie<'static>, state: &str) -> Option<PendingLogin> {

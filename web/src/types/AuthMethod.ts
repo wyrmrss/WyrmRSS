@@ -3,4 +3,4 @@
 /**
  * Sign-in methods enabled on this instance, as reported to the frontend.
  */
-export type AuthMethod = "api_key" | "oidc";
+export type AuthMethod = "api_key" | "oidc" | "password";

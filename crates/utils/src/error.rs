@@ -1,5 +1,6 @@
 use actix_web::{
-    HttpResponse, error,
+    HttpResponse,
+    error,
     http::{StatusCode, header::ContentType},
 };
 use diesel::result::DatabaseErrorKind;
@@ -20,6 +21,8 @@ pub enum AuthError {
     PasswordHashing(String),
     #[error("invalid setup token")]
     InvalidSetupToken,
+    #[error("invalid credentials")]
+    InvalidCredentials,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -162,6 +165,7 @@ impl WyrmError {
                 "authentication is misconfigured on the server, see the server logs"
             }
             WyrmError::Auth(AuthError::InvalidSetupToken) => "invalid setup token",
+            WyrmError::Auth(AuthError::InvalidCredentials) => "invalid credentials",
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => "not found",
             WyrmError::Auth(AuthError::CsrfCheckFailed) => "csrf check failed",
             WyrmError::Auth(AuthError::LoginFailed(_)) => "login failed",
@@ -229,6 +233,7 @@ impl error::ResponseError for WyrmError {
             WyrmError::EmptyFolderName => StatusCode::BAD_REQUEST,
             WyrmError::FeedDiscovery(_) => StatusCode::BAD_REQUEST,
             WyrmError::Auth(AuthError::InvalidSetupToken) => StatusCode::FORBIDDEN,
+            WyrmError::Auth(AuthError::InvalidCredentials) => StatusCode::UNAUTHORIZED,
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => StatusCode::NOT_FOUND,
             WyrmError::Auth(AuthError::CsrfCheckFailed) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::LoginFailed(_)) => StatusCode::UNAUTHORIZED,
