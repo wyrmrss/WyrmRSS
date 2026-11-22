@@ -1,5 +1,6 @@
 use actix_web::{
-    HttpRequest, HttpResponse,
+    HttpRequest,
+    HttpResponse,
     web::{Data, Json},
 };
 use api_utils::context::WyrmContext;
