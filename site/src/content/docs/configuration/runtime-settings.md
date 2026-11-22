@@ -19,3 +19,13 @@ The following settings are stored in the database and can be changed at runtime 
 | Mark as read delay | `0` | Seconds a post must stay open before it's marked read (`On open` mode only); `0` marks it immediately |
 | Delete read posts after | _(never)_ | Days before read posts are deleted; Read Later and archived posts are kept |
 | Delete unread posts after | _(never)_ | Days before unread posts are deleted; Read Later and archived posts are kept |
+
+## How polling works
+
+Each poll asks the publisher whether the feed has changed since the last fetch,
+using the `ETag` and `Last-Modified` headers. If nothing changed, the publisher
+answers "not modified". Wyrm counts the feed as refreshed without downloading
+or parsing it, and no webhooks fire.
+
+Changing a feed's URL or filters, or your RSSHub instance, makes the next poll
+download the full feed again.

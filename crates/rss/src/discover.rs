@@ -72,7 +72,7 @@ async fn fetch_url(http: &HttpClient, url: &str) -> WyrmResult<FetchedUrl> {
     }
 
     let bytes = match http.fetch(url).await {
-        Ok((bytes, _)) => bytes,
+        Ok(fetched) => fetched.body,
         Err(WyrmError::HttpClient(HttpClientError::Unauthorized)) => {
             return Err(WyrmError::FeedDiscovery(
                 "Unauthorized — check credentials in Settings → Credentials".to_string(),

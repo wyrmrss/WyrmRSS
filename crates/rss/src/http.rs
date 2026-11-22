@@ -1,10 +1,13 @@
 use bytes::{Bytes, BytesMut};
 use database::{
-    models::host_credential::{HostCredential, HostCredentialKind},
+    models::{
+        feed::Feed,
+        host_credential::{HostCredential, HostCredentialKind},
+    },
     utils::settings::RuntimeSettings,
 };
 use http::{Extensions, HeaderName, HeaderValue};
-use reqwest::{Request, Response, StatusCode, Url};
+use reqwest::{Request, Response, StatusCode, Url, header};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware, Next, Result};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use std::{collections::HashMap, time::Duration};
@@ -58,6 +61,31 @@ impl From<&RuntimeSettings> for HttpConfig {
     }
 }
 
+#[derive(Default)]
+pub struct HttpValidators {
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+}
+
+impl From<&Feed> for HttpValidators {
+    fn from(feed: &Feed) -> Self {
+        Self {
+            etag: feed.etag.clone(),
+            last_modified: feed.last_modified.clone(),
+        }
+    }
+}
+
+/// A successful (2xx) response, read in full.
+pub struct Fetched {
+    /// Response body, capped at `MAX_RESPONSE_BYTES`.
+    pub body: Bytes,
+    /// `Content-Type` header, lowercased, without parameters like `; charset=`.
+    pub content_type: Option<String>,
+    /// `ETag` and `Last-Modified` headers, saved by feed polling for the next request.
+    pub validators: HttpValidators,
+}
+
 #[derive(Clone)]
 pub struct HttpClient {
     inner: ClientWithMiddleware,
@@ -100,12 +128,45 @@ impl HttpClient {
         })
     }
 
-    /// Fetches `url`, returning the body and the response's `Content-Type`
-    /// header (stripped of parameters like `; charset=`).
-    pub async fn fetch(&self, url: &str) -> WyrmResult<(Bytes, Option<String>)> {
+    /// Unconditional fetch, used by feed discovery and icon resolution
+    /// (site pages and icon images).
+    pub async fn fetch(&self, url: &str) -> WyrmResult<Fetched> {
+        let response = self.send(url, None).await?;
+        Self::read_response(response).await
+    }
+
+    /// Feed polling fetch: sends `validators` as conditional headers and
+    /// returns `None` when the server answers 304 Not Modified.
+    pub async fn fetch_conditional(
+        &self,
+        url: &str,
+        validators: &HttpValidators,
+    ) -> WyrmResult<Option<Fetched>> {
+        let response = self.send(url, Some(validators)).await?;
+
+        if response.status() == StatusCode::NOT_MODIFIED {
+            return Ok(None);
+        }
+
+        Ok(Some(Self::read_response(response).await?))
+    }
+
+    /// Sends a GET with any credential saved for the URL's `host:port` and any conditional headers.
+    /// Error statuses (4xx/5xx) become errors; a 304 is returned as a response.
+    async fn send(&self, url: &str, validators: Option<&HttpValidators>) -> WyrmResult<Response> {
         let mut request = self.inner.get(url);
 
+        if let Some(validators) = validators {
+            if let Some(etag) = &validators.etag {
+                request = request.header(header::IF_NONE_MATCH, etag);
+            }
+            if let Some(last_modified) = &validators.last_modified {
+                request = request.header(header::IF_MODIFIED_SINCE, last_modified);
+            }
+        }
+
         let parsed_url = Url::parse(url).ok();
+
         let credential = parsed_url
             .as_ref()
             .and_then(host_key)
@@ -144,7 +205,32 @@ impl HttpClient {
             );
         }
 
-        let mut response = response.error_for_status()?;
+        Ok(response.error_for_status()?)
+    }
+
+    /// Reads the headers `Fetched` carries and the whole body, failing once the
+    /// body exceeds `MAX_RESPONSE_BYTES`.
+    async fn read_response(mut response: Response) -> WyrmResult<Fetched> {
+        let read_header = |name| {
+            response
+                .headers()
+                .get(name)
+                .and_then(|value| value.to_str().ok())
+                .map(String::from)
+        };
+
+        let content_type = read_header(header::CONTENT_TYPE).map(|v| {
+            v.split(';')
+                .next()
+                .unwrap_or(&v)
+                .trim()
+                .to_ascii_lowercase()
+        });
+
+        let validators = HttpValidators {
+            etag: read_header(header::ETAG),
+            last_modified: read_header(header::LAST_MODIFIED),
+        };
 
         if response
             .content_length()
@@ -153,13 +239,8 @@ impl HttpClient {
             return Err(HttpClientError::ResponseTooLarge(MAX_RESPONSE_BYTES).into());
         }
 
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.split(';').next().unwrap_or(v).trim().to_ascii_lowercase());
-
         let mut body = BytesMut::new();
+
         while let Some(chunk) = response.chunk().await? {
             if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
                 return Err(HttpClientError::ResponseTooLarge(MAX_RESPONSE_BYTES).into());
@@ -167,13 +248,17 @@ impl HttpClient {
             body.extend_from_slice(&chunk);
         }
 
-        Ok((body.freeze(), content_type))
+        Ok(Fetched {
+            body: body.freeze(),
+            content_type,
+            validators,
+        })
     }
 
     pub async fn post_json(&self, url: &str, body: &serde_json::Value) -> WyrmResult<()> {
         self.inner
             .post(url)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(header::CONTENT_TYPE, "application/json")
             .body(body.to_string())
             .send()
             .await?
@@ -182,7 +267,8 @@ impl HttpClient {
     }
 }
 
-/// Credential lookup key for a URL: `host:port`, lowercased, port defaulted.
+/// Key that host credentials are saved and looked up under: `host:port`, lowercased, port
+/// defaulted.
 pub fn host_key(url: &Url) -> Option<String> {
     Some(format!(
         "{}:{}",
@@ -208,6 +294,7 @@ pub fn parse_host_key(input: &str) -> WyrmResult<String> {
 /// Header sent for a custom-header credential; also validates it on write.
 pub fn custom_header(name: &str, value: &str) -> WyrmResult<(HeaderName, HeaderValue)> {
     let invalid = || WyrmError::InvalidInput("invalid header name or value".into());
+
     let header_name: HeaderName = name.parse().map_err(|_| invalid())?;
     let header_value: HeaderValue = value.parse().map_err(|_| invalid())?;
 
@@ -274,5 +361,58 @@ mod tests {
         assert!(custom_header("", "secret").is_err());
         // A newline in the value would let a stored secret inject extra headers.
         assert!(custom_header("x-api-key", "secret\r\nx-injected: 1").is_err());
+    }
+
+    /// Local server that answers 304 when the request carries
+    /// `If-None-Match: "v1"`, and otherwise 200 with that ETag.
+    async fn spawn_etag_server() -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = [0u8; 4096];
+                let read = socket.read(&mut buffer).await.unwrap();
+                let request = String::from_utf8_lossy(&buffer[..read]).to_ascii_lowercase();
+
+                let response = if request.contains("if-none-match: \"v1\"") {
+                    "HTTP/1.1 304 Not Modified\r\nconnection: close\r\n\r\n"
+                } else {
+                    "HTTP/1.1 200 OK\r\netag: \"v1\"\r\ncontent-length: 4\r\nconnection: close\r\n\r\nbody"
+                };
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        format!("http://{address}/feed")
+    }
+
+    #[tokio::test]
+    async fn fetch_conditional_returns_etag_then_none_on_not_modified() {
+        let url = spawn_etag_server().await;
+        let config = HttpConfig {
+            timeout: 5,
+            connect_timeout: 5,
+            retries: 0,
+            user_agent: None,
+        };
+        let client = HttpClient::new(&config, vec![]).unwrap();
+
+        let fetched = client
+            .fetch_conditional(&url, &HttpValidators::default())
+            .await
+            .unwrap()
+            .expect("no validators sent, so the server answers 200");
+        assert_eq!(&fetched.body[..], b"body");
+        assert_eq!(fetched.validators.etag.as_deref(), Some("\"v1\""));
+
+        let revalidated = client
+            .fetch_conditional(&url, &fetched.validators)
+            .await
+            .unwrap();
+        assert!(revalidated.is_none());
     }
 }
