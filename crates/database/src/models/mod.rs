@@ -8,6 +8,7 @@ pub mod feed_icon;
 pub mod folder;
 pub mod host_credential;
 pub mod instance;
+pub mod local_user;
 pub mod session;
 pub mod settings;
 pub mod shortcut;
