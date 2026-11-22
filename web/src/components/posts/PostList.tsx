@@ -16,6 +16,7 @@ import { PostsToolbar } from "./PostsToolbar";
 import { VirtualGroupedList } from "../common/VirtualGroupedList";
 import type { ReaderOutletContext } from "../../pages/ReaderPage";
 import type { FeedId } from "../../types/FeedId";
+import type { MarkReadTarget } from "../../types/MarkReadTarget";
 import type { Post } from "../../types/Post";
 import { postPath } from "../../utils/posts";
 import type { FolderId } from "../../types/FolderId";
@@ -65,6 +66,14 @@ export function PostList() {
 
   const pathFor = (post: Post) => postPath(post, feedIdNum, folderIdNum, false);
 
+  // The toolbar's mark-read button acts on what the list shows.
+  const markReadTarget: MarkReadTarget =
+    feedIdNum !== undefined
+      ? { feed: feedIdNum }
+      : folderIdNum !== undefined
+        ? { folder: folderIdNum }
+        : "all";
+
   usePostNavigation({
     items: posts,
     activePostId,
@@ -88,9 +97,9 @@ export function PostList() {
         <DensityToggle />
         <button
           className="posts-refresh-btn"
-          onClick={() => markRead.mutate(feedIdNum !== undefined ? { feed: feedIdNum } : "all")}
+          onClick={() => markRead.mutate(markReadTarget)}
           disabled={markRead.isPending}
-          title={feedIdNum !== undefined ? "Mark feed as read" : "Mark all as read"}
+          title="Mark as read"
         >
           <TbChecks />
         </button>
