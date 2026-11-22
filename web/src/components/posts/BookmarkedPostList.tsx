@@ -9,7 +9,7 @@ import { useFlattenedPages } from "../../hooks/useFlattenedPages";
 import { DensityToggle } from "./DensityToggle";
 import { PostItem } from "./PostItem";
 import { PostsToolbar } from "./PostsToolbar";
-import { VirtualGroupedList } from "../common/VirtualGroupedList";
+import { VirtualPostList } from "./VirtualPostList";
 import type { ReaderOutletContext } from "../../pages/ReaderPage";
 import type { Post } from "../../types/Post";
 import { postPath } from "../../utils/posts";
@@ -49,7 +49,7 @@ export function BookmarkedPostList() {
       <PostsToolbar value={search} onChange={setSearch} placeholder="Search read later…">
         <DensityToggle />
       </PostsToolbar>
-      <VirtualGroupedList
+      <VirtualPostList
         items={posts}
         isLoading={isLoading}
         hasNextPage={hasNextPage}
@@ -57,7 +57,7 @@ export function BookmarkedPostList() {
         isFetchingNextPage={isFetchingNextPage}
         groupDate={groupDate}
         emptyMessage="Nothing saved for later"
-        activeId={activePostId}
+        openPostId={activePostId}
         renderItem={(post) => (
           <PostItem
             post={post}

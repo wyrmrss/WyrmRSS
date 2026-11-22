@@ -6,7 +6,7 @@ import { usePostNavigation } from "../../hooks/usePostNavigation";
 import { useFlattenedPages } from "../../hooks/useFlattenedPages";
 import { ArchiveItem } from "./ArchiveItem";
 import { PostsToolbar } from "../posts/PostsToolbar";
-import { VirtualGroupedList } from "../common/VirtualGroupedList";
+import { VirtualPostList } from "../posts/VirtualPostList";
 import type { ReaderOutletContext } from "../../pages/ReaderPage";
 import type { PostArchive } from "../../types/PostArchive";
 
@@ -43,7 +43,7 @@ export function ArchiveList() {
   return (
     <div className="pane pane-posts">
       <PostsToolbar value={search} onChange={setSearch} placeholder="Search archive…" />
-      <VirtualGroupedList
+      <VirtualPostList
         items={archives}
         isLoading={isLoading}
         hasNextPage={hasNextPage}
@@ -51,7 +51,7 @@ export function ArchiveList() {
         isFetchingNextPage={isFetchingNextPage}
         groupDate={groupDate}
         emptyMessage="No archived posts"
-        activeId={activePostId}
+        openPostId={activePostId}
         renderItem={(archive) => (
           <ArchiveItem
             archive={archive}
