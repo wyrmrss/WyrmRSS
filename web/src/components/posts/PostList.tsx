@@ -13,7 +13,7 @@ import { useIsMobile } from "../../hooks/useIsMobile";
 import { DensityToggle } from "./DensityToggle";
 import { PostItem } from "./PostItem";
 import { PostsToolbar } from "./PostsToolbar";
-import { VirtualGroupedList } from "../common/VirtualGroupedList";
+import { VirtualPostList } from "./VirtualPostList";
 import type { ReaderOutletContext } from "../../pages/ReaderPage";
 import type { FeedId } from "../../types/FeedId";
 import type { MarkReadTarget } from "../../types/MarkReadTarget";
@@ -112,7 +112,7 @@ export function PostList() {
           <TbRefresh className={pollFeeds.isPending || isRefetching ? "spinning" : ""} />
         </button>
       </PostsToolbar>
-      <VirtualGroupedList
+      <VirtualPostList
         items={posts}
         isLoading={isLoading}
         hasNextPage={hasNextPage}
@@ -122,7 +122,7 @@ export function PostList() {
         emptyMessage={unreadOnly && !debouncedSearch ? "All caught up" : "No posts"}
         onRefresh={isMobile ? () => pollFeeds.mutate() : undefined}
         refreshing={pollFeeds.isPending}
-        activeId={activePostId}
+        openPostId={activePostId}
         renderItem={(post) => (
           <PostItem
             post={post}
