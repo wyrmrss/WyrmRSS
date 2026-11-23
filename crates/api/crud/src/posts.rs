@@ -2,9 +2,10 @@ use actix_web::web::{Data, Json, Path};
 use api_utils::context::WyrmContext;
 use database::{
     models::post::{Post, PostUpdateForm},
-    newtypes::{PostId, UserId},
+    newtypes::PostId,
 };
 use serde::{Deserialize, Serialize};
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_utils::result::WyrmResult;
 
 #[derive(Deserialize, ts_rs::TS)]
@@ -22,15 +23,14 @@ pub struct UpdatePostResponse {
 }
 
 pub async fn update(
+    user: AuthenticatedUser,
     path: Path<PostId>,
     Json(data): Json<UpdatePost>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<UpdatePostResponse>> {
-    // TODO(#372): the requesting user, once the middleware provides it.
-    let user_id = UserId(1);
     let (post, feed_unread_count) = Post::update_with_unread_count(
         &ctx.db_pool,
-        user_id,
+        user.id,
         PostUpdateForm {
             id: path.into_inner(),
             bookmarked: data.bookmarked,

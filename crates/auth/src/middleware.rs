@@ -1,4 +1,4 @@
-use crate::{Auth, session::AuthenticatedUser};
+use crate::{Auth, authenticated_user::AuthenticatedUser};
 use actix_web::{
     Error,
     HttpMessage,

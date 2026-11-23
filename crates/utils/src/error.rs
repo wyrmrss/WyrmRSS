@@ -25,6 +25,8 @@ pub enum AuthError {
     InvalidCredentials,
     #[error("no user linked to OIDC subject {0}")]
     OidcSubjectNotLinked(String),
+    #[error("operation requires admin privileges")]
+    AdminRequired,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -163,6 +165,7 @@ impl WyrmError {
             WyrmError::WebhookTemplate(msg) => msg,
             WyrmError::EmptyFolderName => "folder name cannot be empty",
             WyrmError::FeedDiscovery(msg) => msg,
+            WyrmError::Auth(AuthError::AdminRequired) => "operation requires admin privileges",
             WyrmError::Auth(AuthError::InvalidAuthConfig(_)) => {
                 "authentication is misconfigured on the server, see the server logs"
             }
@@ -237,6 +240,7 @@ impl error::ResponseError for WyrmError {
             WyrmError::WebhookTemplate(_) => StatusCode::BAD_REQUEST,
             WyrmError::EmptyFolderName => StatusCode::BAD_REQUEST,
             WyrmError::FeedDiscovery(_) => StatusCode::BAD_REQUEST,
+            WyrmError::Auth(AuthError::AdminRequired) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::InvalidSetupToken) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::InvalidCredentials) => StatusCode::UNAUTHORIZED,
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => StatusCode::NOT_FOUND,
