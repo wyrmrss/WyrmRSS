@@ -27,7 +27,10 @@ type Tab =
   | "account";
 
 export function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("general");
+  // `?tab=account` opens the account section, e.g. after linking OIDC.
+  const [tab, setTab] = useState<Tab>(() =>
+    new URLSearchParams(location.search).get("tab") === "account" ? "account" : "general",
+  );
   const isMobile = useIsMobile();
   const { signedIn } = useContext(AuthContext);
   // Desktop is signed in through its key and has no account to manage.

@@ -2,6 +2,7 @@ import { type SubmitEvent, useContext, useState } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useAccount, useDeleteAccount, useUpdatePassword } from "../../hooks/useAccount";
 import type { AccountResponse } from "../../types/AccountResponse";
+import { ENDPOINTS } from "../../utils/api";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -122,8 +123,36 @@ function DeleteAccountForm({ account }: { account: AccountResponse }) {
   );
 }
 
+function OidcLink({ linked }: { linked: boolean }) {
+  const { linkError } = useContext(AuthContext);
+  const params = new URLSearchParams({ link: "true", return_to: "/settings?tab=account" });
+
+  return (
+    <div className="settings-section account-form">
+      <h2 className="settings-section-title">OpenID Connect</h2>
+      <p className="settings-hint">
+        {linked
+          ? "Your account is linked to your identity provider, so you can sign in with it."
+          : "Link your account to your identity provider to sign in with it."}
+      </p>
+      <div className="settings-form-actions">
+        <button
+          type="button"
+          className="btn"
+          onClick={() => window.location.assign(`${ENDPOINTS.auth.oidcLogin()}?${params}`)}
+        >
+          {linked ? "Link a different identity" : "Link OIDC"}
+        </button>
+      </div>
+      <div className="account-form-status">
+        {linkError && <p className="settings-status settings-status-err" role="alert">{linkError}</p>}
+      </div>
+    </div>
+  );
+}
+
 export function Account() {
-  const { signOut } = useContext(AuthContext);
+  const { signOut, methods } = useContext(AuthContext);
   const { data: account, isLoading } = useAccount();
   const [signOutError, setSignOutError] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -157,6 +186,7 @@ export function Account() {
       </div>
 
       {account && <PasswordForm hasPassword={account.has_password} />}
+      {account && methods.includes("oidc") && <OidcLink linked={account.oidc_linked} />}
       {account && <DeleteAccountForm account={account} />}
     </section>
   );

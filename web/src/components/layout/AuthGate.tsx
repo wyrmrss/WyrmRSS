@@ -35,12 +35,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     void fetchAuthStatus().then((status) => {
       if (!active) return;
+      // Signed in with an error means a failed OIDC link. Open the account section, which shows it.
+      if (status?.signed_in && callbackError) {
+        history.replaceState(null, "", "/settings?tab=account");
+      }
       setStatus(status);
       setChecked(true);
     });
 
     return () => { active = false; };
-  }, []);
+  }, [callbackError]);
 
   // Listener for unauthorizedEvent (wyrm:unauthorized) set when
   // API calls return a 401 response (see utils/response.ts).
@@ -74,7 +78,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   // No status means the server couldn't be reached. Show the app, which reports that itself.
   if (!status || status.signed_in) return (
-    <AuthContext value={{ signedIn: status?.signed_in ?? false, signOut }}>
+    <AuthContext
+      value={{
+        signedIn: status?.signed_in ?? false,
+        signOut,
+        methods: status?.methods ?? [],
+        linkError: callbackError,
+      }}
+    >
       {children}
     </AuthContext>
   );
