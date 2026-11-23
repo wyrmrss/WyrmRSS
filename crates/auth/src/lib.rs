@@ -12,6 +12,7 @@ pub mod username;
 #[cfg(feature = "oidc")]
 use crate::oidc::Oidc;
 use crate::session::SessionManager;
+use actix_web::HttpRequest;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use wyrm_utils::{config::WyrmStartupConfig, error::AuthError, result::WyrmResult};
@@ -103,6 +104,11 @@ impl Auth {
         self.setup_token
             .as_deref()
             .is_some_and(|token| Sha256::digest(provided.trim()) == Sha256::digest(token))
+    }
+
+    /// True when the request carries the desktop app's key.
+    pub fn desktop_key_valid(&self, req: &HttpRequest) -> bool {
+        desktop_key::valid(req, self)
     }
 }
 

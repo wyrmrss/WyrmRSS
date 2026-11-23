@@ -1,7 +1,6 @@
-use crate::{Auth, desktop_key, session::AuthenticatedUser};
+use crate::{Auth, session::AuthenticatedUser};
 use actix_web::{
-    Error,
-    HttpMessage,
+    Error, HttpMessage,
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
     error::ErrorUnauthorized,
@@ -25,7 +24,7 @@ pub async fn middleware(
         .expect("auth data configured");
 
     // The desktop app's per-launch key. Desktop is single-user, so it acts as user 1.
-    if desktop_key::valid(req.request(), auth) {
+    if auth.desktop_key_valid(req.request()) {
         let user = LocalUser::get(&ctx.db_pool, UserId(1)).await?;
         req.extensions_mut().insert(AuthenticatedUser::from(user));
         return next.call(req).await;

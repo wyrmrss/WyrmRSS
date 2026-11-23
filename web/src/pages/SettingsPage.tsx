@@ -1,4 +1,5 @@
 import { useContext, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { AuthContext } from "../context/AuthContext";
 import { Account } from "../components/settings/Account";
 import { Appearance } from "../components/settings/Appearance";
@@ -29,6 +30,8 @@ export function SettingsPage() {
   const [tab, setTab] = useState<Tab>("general");
   const isMobile = useIsMobile();
   const { signedIn } = useContext(AuthContext);
+  // Desktop is signed in through its key and has no account to manage.
+  const showAccount = signedIn && !isTauri();
 
   return (
     <div className="settings-page">
@@ -89,7 +92,7 @@ export function SettingsPage() {
         >
           Import / Export
         </button>
-        {signedIn && (
+        {showAccount && (
           <button
             className={`settings-tab${tab === "account" ? " active" : ""}`}
             onClick={() => setTab("account")}
@@ -109,7 +112,7 @@ export function SettingsPage() {
         {tab === "folders" && <Folders />}
         {tab === "webhooks" && <Webhooks />}
         {tab === "opml" && <Opml />}
-        {tab === "account" && signedIn && <Account />}
+        {tab === "account" && showAccount && <Account />}
         <div className="settings-app-version">v{version}</div>
       </div>
     </div>
