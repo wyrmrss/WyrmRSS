@@ -12,7 +12,7 @@ use wyrm_auth::{
 use wyrm_utils::{error::WyrmError, result::WyrmResult};
 
 #[derive(Deserialize, ts_rs::TS)]
-#[ts(export)]
+#[ts(export, optional_fields)]
 pub struct UpdatePassword {
     current_password: Option<String>,
     new_password: String,

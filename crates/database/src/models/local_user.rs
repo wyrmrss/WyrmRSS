@@ -1,13 +1,15 @@
 use crate::{
-    DatabaseConn,
-    DatabasePool,
+    DatabaseConn, DatabasePool,
     newtypes::UserId,
     schema::{self, local_users},
 };
 use chrono::{DateTime, Utc};
 use diesel::{Selectable, deserialize::Queryable, prelude::*};
-use diesel_async::RunQueryDsl;
-use wyrm_utils::{error::WyrmError, result::WyrmResult};
+use diesel_async::{AsyncConnection, RunQueryDsl};
+use wyrm_utils::{
+    error::{DatabaseError, WyrmError},
+    result::WyrmResult,
+};
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = schema::local_users)]
@@ -76,6 +78,38 @@ impl LocalUser {
             .get_result(conn)
             .await
             .map_err(WyrmError::from)
+    }
+
+    /// Deletes the user and, by cascade, everything they own.
+    /// Fails with a conflict if they're the instance's only admin.
+    pub async fn delete(pool: &DatabasePool, id: UserId) -> WyrmResult<Self> {
+        let mut pool = pool.get().await?;
+        let conn = &mut *pool;
+
+        conn.transaction(async |conn| {
+            let admins = local_users::table
+                .filter(local_users::is_admin.eq(true))
+                .select(local_users::id);
+
+            // Locks the admin rows, so two admins deleting themselves at once can't both pass.
+            // SQLite has no row locks but only allows one writer at a time.
+            #[cfg(feature = "postgres")]
+            let admins = admins.for_update();
+            let admin_ids: Vec<UserId> = admins.load(conn).await?;
+
+            if admin_ids == [id] {
+                return Err(WyrmError::Database(DatabaseError::Conflict(
+                    "an instance needs at least one admin".into(),
+                )));
+            }
+
+            diesel::delete(local_users::table.find(id))
+                .returning(Self::as_returning())
+                .get_result(conn)
+                .await
+                .map_err(WyrmError::from)
+        })
+        .await
     }
 }
 
