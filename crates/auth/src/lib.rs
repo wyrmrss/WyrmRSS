@@ -1,4 +1,5 @@
 //! Authentication for the shared instance; reader data is shared by all users.
+pub mod authenticated_user;
 mod desktop_key;
 #[cfg(feature = "oidc")]
 mod http;

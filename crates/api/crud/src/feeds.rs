@@ -5,9 +5,10 @@ use database::{
         feed::{DisplayMode, Feed, FeedInsertForm, FeedUpdateForm},
         feed_icon::FeedIcon,
     },
-    newtypes::{FeedId, Filters, UserId},
+    newtypes::{FeedId, Filters},
 };
 use serde::Deserialize;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_rss::{
     discover::{self, FetchedUrl},
     icon::ensure_feed_icon,
@@ -43,6 +44,7 @@ pub struct UpdateFeed {
 }
 
 pub async fn create(
+    user: AuthenticatedUser,
     Json(data): Json<CreateFeed>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<Feed>> {
@@ -58,8 +60,7 @@ pub async fn create(
     let feed = Feed::create(
         &ctx.db_pool,
         FeedInsertForm {
-            // TODO(#372): the requesting user, once the middleware provides it.
-            user_id: UserId(1),
+            user_id: user.id,
             title: data.title,
             url,
             ttl: data.ttl,
@@ -80,14 +81,13 @@ pub async fn create(
 }
 
 pub async fn update(
+    user: AuthenticatedUser,
     path: Path<FeedId>,
     Json(data): Json<UpdateFeed>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<Feed>> {
     ctx.deny_in_demo()?;
 
-    // TODO(#372): the requesting user, once the middleware provides it.
-    let user_id = UserId(1);
     let http = ctx.http().await?;
     let url_resolver = ctx.url_resolver()?;
 
@@ -97,7 +97,7 @@ pub async fn update(
     // url field, so an unchanged one must pass through without a network
     // round-trip, otherwise a TTL/title edit would fail while the feed's
     // site happens to be down.
-    let feed = Feed::get(&ctx.db_pool, user_id, id).await?;
+    let feed = Feed::get(&ctx.db_pool, user.id, id).await?;
     let (url, fetched) = match data.url {
         Some(u) if u == feed.url => (Some(feed.url.clone()), FetchedUrl::None),
         Some(u) => {
@@ -126,7 +126,7 @@ pub async fn update(
         &ctx.db_pool,
         FeedUpdateForm {
             id,
-            user_id,
+            user_id: user.id,
             title: data.title,
             url,
             ttl: data.ttl,
@@ -157,11 +157,13 @@ pub async fn update(
     Ok(Json(feed))
 }
 
-pub async fn delete(path: Path<FeedId>, ctx: Data<WyrmContext>) -> WyrmResult<Json<Feed>> {
+pub async fn delete(
+    user: AuthenticatedUser,
+    path: Path<FeedId>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<Feed>> {
     ctx.deny_in_demo()?;
 
-    // TODO(#372): the requesting user, once the middleware provides it.
-    let user_id = UserId(1);
-    let feed = Feed::delete(&ctx.db_pool, user_id, path.into_inner()).await?;
+    let feed = Feed::delete(&ctx.db_pool, user.id, path.into_inner()).await?;
     Ok(Json(feed))
 }

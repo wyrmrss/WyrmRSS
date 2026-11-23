@@ -1,3 +1,4 @@
+use crate::authenticated_user::AuthenticatedUser;
 use actix_web::{
     HttpRequest,
     HttpResponseBuilder,
@@ -11,7 +12,6 @@ use database::{
         local_user::LocalUser,
         session::{Session, SessionInsertForm},
     },
-    newtypes::UserId,
 };
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -36,24 +36,6 @@ pub struct SessionManager {
     pub origin: String,
     /// Served over HTTPS: session cookie gets `Secure` and the `__Host-` prefix.
     pub secure: bool,
-}
-
-/// The signed-in user. This is what API handlers get from middleware.
-#[derive(Clone)]
-pub struct AuthenticatedUser {
-    pub id: UserId,
-    pub username: String,
-    pub is_admin: bool,
-}
-
-impl From<LocalUser> for AuthenticatedUser {
-    fn from(user: LocalUser) -> Self {
-        Self {
-            id: user.id,
-            username: user.username,
-            is_admin: user.is_admin,
-        }
-    }
 }
 
 /// Outcome of `authenticate`.

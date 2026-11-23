@@ -12,10 +12,11 @@ use database::{
         folder::Folder,
         settings::Settings,
     },
-    newtypes::{FolderId, UserId},
+    newtypes::FolderId,
 };
 use std::{collections::HashMap, time::Duration};
 use tracing::warn;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_rss::{
     opml::{Opml, Outline},
     worker::WorkerCommand,
@@ -36,7 +37,11 @@ pub async fn get(ctx: Data<WyrmContext>) -> WyrmResult<Json<SettingsResponse>> {
 /// Imports feeds from a raw OPML request body. Duplicate and invalid URLs are
 /// skipped; all other errors propagate. Triggers a best-effort poll after import
 /// and waits for it (bounded by one http timeout) before responding.
-pub async fn import(body: web::Bytes, ctx: Data<WyrmContext>) -> WyrmResult<HttpResponse> {
+pub async fn import(
+    user: AuthenticatedUser,
+    body: web::Bytes,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<HttpResponse> {
     ctx.deny_in_demo()?;
 
     let opml = Opml::from_xml(body.as_ref())?;
@@ -53,13 +58,13 @@ pub async fn import(body: web::Bytes, ctx: Data<WyrmContext>) -> WyrmResult<Http
         // standalone leaf feed
         if let Some(url) = &outline.xml_url {
             if let Some(url) = normalize_or_skip(url) {
-                create_feed(&ctx, outline.name(), &url, None).await?;
+                create_feed(&user, outline.name(), &url, None, &ctx).await?;
             }
         // folder - children are feeds, each resolves/creates the folder by name
         } else {
             for child in &outline.children {
                 if let Some(url) = child.xml_url.as_deref().and_then(normalize_or_skip) {
-                    create_feed(&ctx, child.name(), &url, Some(outline.name())).await?;
+                    create_feed(&user, child.name(), &url, Some(outline.name()), &ctx).await?;
                 }
             }
         }
@@ -80,13 +85,11 @@ pub async fn import(body: web::Bytes, ctx: Data<WyrmContext>) -> WyrmResult<Http
 
 /// Exports all feeds as an OPML file. Feeds in a folder are grouped under a
 /// folder outline; standalone feeds are top-level outlines.
-pub async fn export(ctx: Data<WyrmContext>) -> WyrmResult<XmlResponse> {
+pub async fn export(user: AuthenticatedUser, ctx: Data<WyrmContext>) -> WyrmResult<XmlResponse> {
     let url_resolver = ctx.url_resolver()?;
-    // TODO(#372): the requesting user, once the middleware provides it.
-    let user_id = UserId(1);
 
-    let feeds = Feed::get_all_for_user(&ctx.db_pool, user_id).await?;
-    let folders = Folder::get_all(&ctx.db_pool, user_id).await?;
+    let feeds = Feed::get_all_for_user(&ctx.db_pool, user.id).await?;
+    let folders = Folder::get_all(&ctx.db_pool, user.id).await?;
     let folder_names: HashMap<FolderId, String> =
         folders.into_iter().map(|f| (f.id, f.name)).collect();
 
@@ -128,16 +131,16 @@ pub async fn export(ctx: Data<WyrmContext>) -> WyrmResult<XmlResponse> {
 
 /// Creates a feed, skipping it if it already exists.
 async fn create_feed(
-    ctx: &WyrmContext,
+    user: &AuthenticatedUser,
     title: &str,
     url: &str,
     folder: Option<&str>,
+    ctx: &WyrmContext,
 ) -> WyrmResult<()> {
     match Feed::create(
         &ctx.db_pool,
         FeedInsertForm {
-            // TODO(#372): the requesting user, once the middleware provides it.
-            user_id: UserId(1),
+            user_id: user.id,
             title: title.to_string(),
             url: url.to_string(),
             ttl: 60,
