@@ -77,6 +77,11 @@ export const ENDPOINTS = {
     update: (id: FolderId) => `${apiBase()}/folders/${id}`,
     delete: (id: FolderId) => `${apiBase()}/folders/${id}`,
   },
+  account: {
+    get: () => `${apiBase()}/account`,
+    password: () => `${apiBase()}/account/password`,
+    delete: () => `${apiBase()}/account`,
+  },
   settings: {
     get: () => `${apiBase()}/settings`,
     update: () => `${apiBase()}/settings`,

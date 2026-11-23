@@ -830,6 +830,31 @@ body.reader-resizing {
   }
 }
 
+/* A form section inside the Account settings. Its title is the form's first child, which drops
+   the title's divider, so the form draws it instead. */
+.account-form {
+  margin-top: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Same size and colour as the settings labels, with the username in the heading colour. */
+.account-signed-in {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text);
+
+  strong {
+    color: var(--text-h);
+  }
+}
+
+/* Always rendered with room for one message, so showing one doesn't move what's below. */
+.account-form-status {
+  min-height: 0.9rem;
+  margin-top: -6px;
+}
+
 .opml-dropzone {
   display: flex;
   align-items: center;
@@ -1940,9 +1965,7 @@ body.reader-resizing {
 .api-key-form h2.setup-title {
   text-align: center;
   font-size: 1.1rem;
-}
-
-.api-key-form p.setup-note {
+}.api-key-form p.setup-note {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 5px;

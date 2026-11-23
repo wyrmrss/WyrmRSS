@@ -1,5 +1,6 @@
 import { type SubmitEvent, useState } from "react";
 import { login } from "../../api/auth";
+import { useTheme } from "../../hooks/useTheme";
 import { ENDPOINTS } from "../../utils/api";
 import { ApiError, throwApiError } from "../../utils/error";
 import type { AuthMethod } from "../../types/AuthMethod";
@@ -11,6 +12,7 @@ interface SignInScreenProps {
 }
 
 export function SignInScreen({ methods, callbackError }: SignInScreenProps) {
+  const { theme } = useTheme();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -42,7 +44,11 @@ export function SignInScreen({ methods, callbackError }: SignInScreenProps) {
   return (
     <div className="api-key-gate">
       <form className="api-key-form" onSubmit={handlePasswordSignIn}>
-        <h2>Sign in to Wyrm</h2>
+        <img
+          className="setup-logo"
+          src={theme === "light" ? "/l-o-dark.svg" : "/l-o-light.svg"}
+          alt="Wyrm-RSS"
+        />
         {passwordEnabled && (
           <>
             <label className="setup-field">
