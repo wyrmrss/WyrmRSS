@@ -1,15 +1,26 @@
 use actix_web::{
-    HttpResponse,
+    HttpRequest, HttpResponse,
+    http::header,
     web::{Data, Json},
 };
 use api_utils::context::WyrmContext;
 use database::models::local_user::{LocalUser, LocalUserUpdateForm};
 use serde::Deserialize;
 use wyrm_auth::{
+    Auth,
     authenticated_user::AuthenticatedUser,
     password::{hash_password, validate_password, verify_password},
 };
 use wyrm_utils::{error::WyrmError, result::WyrmResult};
+
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, optional_fields)]
+pub struct DeleteAccount {
+    /// Required when the user has a password.
+    password: Option<String>,
+    /// Required for users without a password (OIDC-only), as a typed confirmation.
+    username: Option<String>,
+}
 
 #[derive(Deserialize, ts_rs::TS)]
 #[ts(export, optional_fields)]
@@ -64,4 +75,54 @@ pub async fn update_password(
     .await?;
 
     Ok(HttpResponse::NoContent().finish())
+}
+
+/// Deletes the signed-in user's account and everything they own,
+/// after they confirm with their password, or their username if
+/// they have no password.
+pub async fn delete(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    Json(data): Json<DeleteAccount>,
+    ctx: Data<WyrmContext>,
+    auth: Data<Auth>,
+) -> WyrmResult<HttpResponse> {
+    ctx.deny_in_demo()?;
+
+    let sessions = auth.sessions()?;
+
+    let local_user = LocalUser::get(&ctx.db_pool, user.id).await?;
+
+    match &local_user.password_hash {
+        Some(hash) => {
+            let password = data
+                .password
+                .ok_or_else(|| WyrmError::InvalidInput("password is required".into()))?;
+
+            if !verify_password(password, hash.clone()).await {
+                return Err(WyrmError::InvalidInput("password is incorrect".into()));
+            }
+        }
+        None => {
+            let confirmed = data
+                .username
+                .is_some_and(|typed| typed.trim().eq_ignore_ascii_case(&local_user.username));
+
+            if !confirmed {
+                return Err(WyrmError::InvalidInput(
+                    "type your username to confirm".into(),
+                ));
+            }
+        }
+    }
+
+    LocalUser::delete(&ctx.db_pool, user.id).await?;
+
+    // Clear the browser's cookie.
+    let cookie = sessions.revoke(&ctx.db_pool, &req).await?;
+
+    Ok(HttpResponse::NoContent()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .cookie(cookie)
+        .finish())
 }
