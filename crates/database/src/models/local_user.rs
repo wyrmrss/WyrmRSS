@@ -1,5 +1,6 @@
 use crate::{
-    DatabaseConn, DatabasePool,
+    DatabaseConn,
+    DatabasePool,
     newtypes::UserId,
     schema::{self, local_users},
 };
