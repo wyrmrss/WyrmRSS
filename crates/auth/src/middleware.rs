@@ -1,4 +1,4 @@
-use crate::{Auth, api_key};
+use crate::{Auth, desktop_key, session::AuthenticatedUser};
 use actix_web::{
     Error,
     HttpMessage,
@@ -10,6 +10,7 @@ use actix_web::{
     web,
 };
 use api_utils::context::WyrmContext;
+use database::{models::local_user::LocalUser, newtypes::UserId};
 
 pub async fn middleware(
     req: ServiceRequest,
@@ -23,8 +24,10 @@ pub async fn middleware(
         .app_data::<web::Data<Auth>>()
         .expect("auth data configured");
 
-    // A valid API key: nothing more to check.
-    if api_key::valid(req.request(), auth) {
+    // The desktop app's per-launch key. Desktop is single-user, so it acts as user 1.
+    if desktop_key::valid(req.request(), auth) {
+        let user = LocalUser::get(&ctx.db_pool, UserId(1)).await?;
+        req.extensions_mut().insert(AuthenticatedUser::from(user));
         return next.call(req).await;
     }
 

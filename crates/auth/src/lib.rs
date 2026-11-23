@@ -1,5 +1,5 @@
 //! Authentication for the shared instance; reader data is shared by all users.
-mod api_key;
+mod desktop_key;
 #[cfg(feature = "oidc")]
 mod http;
 pub mod middleware;
@@ -21,13 +21,12 @@ use wyrm_utils::{config::WyrmStartupConfig, error::AuthError, result::WyrmResult
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case", export)]
 pub enum AuthMethod {
-    ApiKey,
     Oidc,
     Password,
 }
 
 pub struct Auth {
-    api_key: Option<String>,
+    desktop_key: Option<String>,
     #[cfg(feature = "oidc")]
     oidc: Option<Oidc>,
     sessions: Option<SessionManager>,
@@ -41,7 +40,7 @@ impl Auth {
             .map(|url| SessionManager::from_public_url(&url));
 
         Ok(Self {
-            api_key: config.api_key.clone(),
+            desktop_key: config.desktop_key.clone(),
             #[cfg(feature = "oidc")]
             oidc: Oidc::new(config)?,
             sessions,
@@ -51,9 +50,6 @@ impl Auth {
 
     pub fn methods(&self) -> Vec<AuthMethod> {
         let mut methods = Vec::new();
-        if self.api_key.is_some() {
-            methods.push(AuthMethod::ApiKey);
-        }
         if self.oidc_enabled() {
             methods.push(AuthMethod::Oidc);
         }
@@ -114,24 +110,11 @@ impl Auth {
 mod tests {
     use super::*;
 
-    fn api_key_config() -> WyrmStartupConfig {
-        WyrmStartupConfig {
-            api_key: Some("secret".into()),
-            ..Default::default()
-        }
-    }
-
     #[test]
     fn no_public_url_lists_no_password_and_has_no_sessions() {
         let auth = Auth::new(&WyrmStartupConfig::default()).expect("valid config");
         assert!(auth.methods().is_empty());
         assert!(auth.sessions().is_err());
-    }
-
-    #[test]
-    fn api_key_without_public_url_is_the_only_method() {
-        let auth = Auth::new(&api_key_config()).expect("valid config");
-        assert!(matches!(auth.methods().as_slice(), [AuthMethod::ApiKey]));
     }
 
     #[cfg(feature = "oidc")]

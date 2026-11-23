@@ -1,5 +1,6 @@
 use actix_web::{
-    HttpRequest, HttpResponseBuilder,
+    HttpRequest,
+    HttpResponseBuilder,
     cookie::{Cookie, SameSite, time::Duration as CookieDuration},
     http::header,
 };

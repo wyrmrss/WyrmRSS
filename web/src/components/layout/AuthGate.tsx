@@ -1,5 +1,5 @@
-import { type SubmitEvent, useEffect, useRef, useState } from "react";
-import { clearApiKey, fetchAuthStatus, fetchWithAuth, setApiKey, verifyApiKey } from "../../utils/auth";
+import { useEffect, useState } from "react";
+import { fetchAuthStatus, fetchWithAuth } from "../../utils/auth";
 import { ENDPOINTS } from "../../utils/api";
 import { AUTH } from "../../utils/constants";
 import { AuthContext } from "../../context/AuthContext";
@@ -10,7 +10,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   // 401 locks the gate and prompts for the configured sign-in methods.
   const [locked, setLocked] = useState(false);
 
-  const [error, setError] = useState<string | null>(() => {
+  const [error] = useState<string | null>(() => {
     const callbackError = new URLSearchParams(location.search).get(AUTH.errorParam);
     if (callbackError === "oidc") {
       return "Sign-in failed. Check that your account is allowed, then try again.";
@@ -28,11 +28,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   });
 
   const [status, setStatus] = useState<AuthStatusResponse>({
-    methods: ["api_key"], signed_in: false,
+    methods: [], signed_in: false,
   });
-
-  const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Runs on mount and on lock changes, so a burst of 401s fetches status once.
   useEffect(() => {
@@ -67,34 +64,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  async function handleApiKeySubmit(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-
-    const key = inputRef.current?.value.trim();
-    if (!key) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const valid = await verifyApiKey(key);
-      if (valid) {
-        setApiKey(key);
-        setLocked(false);
-      } else {
-        setError("Invalid API key.");
-      }
-    } catch {
-      setError("Unable to reach the server. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function signOut() {
     const response = await fetchWithAuth(ENDPOINTS.auth.logout(), { method: "POST" });
     if (!response.ok) throw new Error("Sign-out failed. Please try again.");
-    clearApiKey();
     // A full navigation clears reader caches and returns to the sign-in screen.
     window.location.reload();
   }
@@ -106,12 +78,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   );
 
   const oidcEnabled = status.methods.includes("oidc");
-  const apiKeyEnabled = status.methods.includes("api_key");
 
   return (
     <div className="api-key-gate">
-      <form className="api-key-form" onSubmit={handleApiKeySubmit}>
-        <h2>{oidcEnabled ? "Sign in to Wyrm" : "API Key Required"}</h2>
+      <div className="api-key-form">
+        <h2>Sign in to Wyrm</h2>
         {oidcEnabled && (
           <>
             <p>Sign in with your identity provider to access this instance.</p>
@@ -120,19 +91,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </a>
           </>
         )}
-        {apiKeyEnabled && (
-          <>
-            <p>{oidcEnabled ? "Or connect with an API key." : "This instance of Wyrm requires an API key to access."}</p>
-            <input ref={inputRef} type="password" aria-label="API key" placeholder="Enter API key" autoFocus={!oidcEnabled} disabled={loading} />
-          </>
-        )}
         {error && <p className="api-key-error" role="alert">{error}</p>}
-        {apiKeyEnabled && (
-          <button type="submit" className={oidcEnabled ? "btn" : "btn btn-primary"} disabled={loading}>
-            {loading ? "Verifying…" : "Connect"}
-          </button>
-        )}
-      </form>
+      </div>
     </div>
   );
 }
