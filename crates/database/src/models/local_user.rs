@@ -1,6 +1,5 @@
 use crate::{
-    DatabaseConn,
-    DatabasePool,
+    DatabaseConn, DatabasePool,
     newtypes::UserId,
     schema::{self, local_users},
 };
@@ -81,6 +80,16 @@ impl LocalUser {
             .map_err(WyrmError::from)
     }
 
+    pub async fn create(pool: &DatabasePool, form: LocalUserInsertForm) -> WyrmResult<Self> {
+        let mut conn = pool.get().await?;
+        diesel::insert_into(local_users::table)
+            .values(&form)
+            .returning(Self::as_returning())
+            .get_result(&mut conn)
+            .await
+            .map_err(WyrmError::from)
+    }
+
     /// Deletes the user and, by cascade, everything they own.
     /// Fails with a conflict if they're the instance's only admin.
     pub async fn delete(pool: &DatabasePool, id: UserId) -> WyrmResult<Self> {
@@ -112,6 +121,14 @@ impl LocalUser {
         })
         .await
     }
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::local_users)]
+#[diesel(check_for_backend(crate::Backend))]
+pub struct LocalUserInsertForm {
+    pub username: String,
+    pub password_hash: String,
 }
 
 #[derive(AsChangeset)]

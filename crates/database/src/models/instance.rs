@@ -1,16 +1,31 @@
 use crate::{
-    DatabaseConn,
-    DatabasePool,
+    DatabaseConn, DatabasePool,
     models::local_user::{LocalUser, LocalUserUpdateForm},
     newtypes::UserId,
     schema::{self, local_instance},
 };
 use diesel::{Selectable, deserialize::Queryable, prelude::*};
 use diesel_async::{AsyncConnection, RunQueryDsl};
+use diesel_derive_enum::DbEnum;
+use serde::{Deserialize, Serialize};
 use wyrm_utils::{
     error::{DatabaseError::Conflict, WyrmError},
     result::WyrmResult,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, DbEnum, Serialize, Deserialize, ts_rs::TS)]
+#[cfg_attr(
+    feature = "postgres",
+    ExistingTypePath = "crate::schema::sql_types::RegistrationMode"
+)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case", export)]
+pub enum RegistrationMode {
+    /// Account registration is not allowed.
+    Closed,
+    /// Anyone can register.
+    Open,
+}
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = schema::local_instance)]
@@ -19,6 +34,8 @@ pub struct LocalInstance {
     /// Whether this instance has been set up yet.
     /// True from the start on desktop, which is single-user and skips setup.
     pub is_setup: bool,
+    /// Who can create an account. Closed by default.
+    pub registration_mode: RegistrationMode,
 }
 
 impl LocalInstance {

@@ -1,10 +1,14 @@
 use actix_web::web;
 use api_api::auth;
 
-/// Reachable without signing in: the sign-in flow, and logout so an expired session can clear its
+/// Reachable without signing in: sign-in, sign-up, and logout so an expired session can clear its
 /// cookie.
 pub fn public_config(cfg: &mut web::ServiceConfig) {
     cfg.route("/auth/status", web::get().to(auth::status::status))
+        .route(
+            "/auth/register",
+            web::post().to(api_crud::account::register),
+        )
         .route("/auth/login", web::post().to(api_crud::auth::login))
         .route("/auth/logout", web::post().to(api_crud::auth::logout));
 

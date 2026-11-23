@@ -1,18 +1,37 @@
 use actix_web::{
-    HttpRequest,
-    HttpResponse,
+    HttpRequest, HttpResponse,
     http::header,
     web::{Data, Json},
 };
 use api_utils::context::WyrmContext;
-use database::models::local_user::{LocalUser, LocalUserUpdateForm};
+use database::models::{
+    instance::{LocalInstance, RegistrationMode},
+    local_user::{LocalUser, LocalUserInsertForm, LocalUserUpdateForm},
+};
 use serde::Deserialize;
 use wyrm_auth::{
     Auth,
     authenticated_user::AuthenticatedUser,
     password::{hash_password, validate_password, verify_password},
+    username::normalize_username,
 };
-use wyrm_utils::{error::WyrmError, result::WyrmResult};
+use wyrm_utils::{
+    error::{
+        AuthError::RegistrationClosed,
+        DatabaseError::{Conflict, UniqueViolation},
+        WyrmError,
+    },
+    result::WyrmResult,
+};
+
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct RegisterAccount {
+    /// New user's username.
+    username: String,
+    /// New user's password.
+    password: String,
+}
 
 #[derive(Deserialize, ts_rs::TS)]
 #[ts(export, optional_fields)]
@@ -28,6 +47,53 @@ pub struct DeleteAccount {
 pub struct UpdatePassword {
     current_password: Option<String>,
     new_password: String,
+}
+
+pub async fn register(
+    req: HttpRequest,
+    Json(data): Json<RegisterAccount>,
+    ctx: Data<WyrmContext>,
+    auth: Data<Auth>,
+) -> WyrmResult<HttpResponse> {
+    ctx.deny_in_demo()?;
+
+    let sessions = auth.sessions()?;
+
+    sessions.check_csrf(&req)?;
+
+    let registration_mode = LocalInstance::get(&ctx.db_pool).await?.registration_mode;
+
+    if registration_mode == RegistrationMode::Closed {
+        return Err(WyrmError::Auth(RegistrationClosed));
+    }
+
+    let username = normalize_username(&data.username)?;
+
+    validate_password(&data.password)?;
+
+    let password_hash = hash_password(data.password).await?;
+
+    let form = LocalUserInsertForm {
+        username,
+        password_hash,
+    };
+
+    let local_user = LocalUser::create(&ctx.db_pool, form)
+        .await
+        .map_err(|e| match e {
+            WyrmError::Database(UniqueViolation(_)) => {
+                WyrmError::Database(Conflict("username is already taken".into()))
+            }
+            e => e,
+        })?;
+
+    let authenticated = sessions.create(&ctx.db_pool, local_user).await?;
+
+    let mut response = HttpResponse::Created();
+
+    authenticated.set_cookie(&mut response);
+
+    Ok(response.finish())
 }
 
 pub async fn update_password(

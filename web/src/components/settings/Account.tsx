@@ -1,8 +1,10 @@
 import { type SubmitEvent, useContext, useState } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useAccount, useDeleteAccount, useUpdatePassword } from "../../hooks/useAccount";
+import { useNewPassword } from "../../hooks/useNewPassword";
 import type { AccountResponse } from "../../types/AccountResponse";
 import { ENDPOINTS } from "../../utils/api";
+import { AUTH } from "../../utils/constants";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -11,23 +13,19 @@ function errorMessage(error: unknown): string {
 function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
   const { mutate, isPending, error, isSuccess, reset } = useUpdatePassword();
   const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const newPassword = useNewPassword();
 
-  const showMismatch = confirmPassword !== "" && newPassword !== confirmPassword;
-  const ready =
-    (!hasPassword || currentPassword !== "") && newPassword !== "" && newPassword === confirmPassword;
+  const ready = (!hasPassword || currentPassword !== "") && newPassword.ready;
 
   function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!ready || isPending) return;
     mutate(
-      { current_password: hasPassword ? currentPassword : undefined, new_password: newPassword },
+      { current_password: hasPassword ? currentPassword : undefined, new_password: newPassword.password },
       {
         onSuccess: () => {
           setCurrentPassword("");
-          setNewPassword("");
-          setConfirmPassword("");
+          newPassword.clear();
         },
       },
     );
@@ -54,19 +52,20 @@ function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
         <label>New password</label>
         <input
           type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
+          value={newPassword.password}
+          onChange={(e) => newPassword.setPassword(e.target.value)}
           autoComplete="new-password"
+          placeholder={`At least ${AUTH.minPasswordLength} characters`}
         />
       </div>
       <div className="settings-field">
         <label>Confirm new password</label>
         <input
           type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
+          value={newPassword.confirm}
+          onChange={(e) => newPassword.setConfirm(e.target.value)}
           autoComplete="new-password"
-          aria-invalid={showMismatch}
+          aria-invalid={newPassword.showMismatch}
         />
       </div>
       <div className="settings-form-actions">
@@ -75,7 +74,7 @@ function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
         </button>
       </div>
       <div className="account-form-status">
-        {showMismatch && <p className="settings-status settings-status-err">The passwords don't match.</p>}
+        {newPassword.showMismatch && <p className="settings-status settings-status-err">The passwords don't match.</p>}
         {error && <p className="settings-status settings-status-err" role="alert">{errorMessage(error)}</p>}
         {isSuccess && <p className="settings-status settings-status-ok">Password saved.</p>}
       </div>

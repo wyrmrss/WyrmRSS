@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getLocalInstance } from "../../api/instance";
+import { InstanceContext } from "../../context/InstanceContext";
 import type { LocalInstanceResponse } from "../../types/LocalInstanceResponse";
 import { SetupScreen } from "./SetupScreen";
 
@@ -18,5 +19,5 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   if (failed) return children;
   if (!instance) return null;
   if (!instance.is_setup) return <SetupScreen />;
-  return children;
+  return <InstanceContext value={instance}>{children}</InstanceContext>;
 }
