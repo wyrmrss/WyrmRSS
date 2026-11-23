@@ -1,4 +1,4 @@
-use crate::{Auth, api_key};
+use crate::{Auth, session::AuthenticatedUser};
 use actix_web::{
     Error,
     HttpMessage,
@@ -10,6 +10,7 @@ use actix_web::{
     web,
 };
 use api_utils::context::WyrmContext;
+use database::{models::local_user::LocalUser, newtypes::UserId};
 
 pub async fn middleware(
     req: ServiceRequest,
@@ -23,15 +24,14 @@ pub async fn middleware(
         .app_data::<web::Data<Auth>>()
         .expect("auth data configured");
 
-    // No auth configured or a valid API key: nothing to check.
-    if !auth.enabled() || api_key::valid(req.request(), auth) {
+    // The desktop app's per-launch key. Desktop is single-user, so it acts as user 1.
+    if auth.desktop_key_valid(req.request()) {
+        let user = LocalUser::get(&ctx.db_pool, UserId(1)).await?;
+        req.extensions_mut().insert(AuthenticatedUser::from(user));
         return next.call(req).await;
     }
 
-    // Otherwise the caller must have a valid session.
-    let Some(sessions) = auth.sessions() else {
-        return Err(ErrorUnauthorized("Authentication required"));
-    };
+    let sessions = auth.sessions()?;
 
     let Some(authenticated) = sessions.authenticate(&ctx.db_pool, req.request()).await? else {
         return Err(ErrorUnauthorized("Authentication required"));
@@ -41,7 +41,7 @@ pub async fn middleware(
         sessions.check_csrf(req.request())?;
     }
 
-    req.extensions_mut().insert(authenticated.user_id);
+    req.extensions_mut().insert(authenticated.user);
 
     let mut response = next.call(req).await?;
     if let Some(cookie) = authenticated.cookie {

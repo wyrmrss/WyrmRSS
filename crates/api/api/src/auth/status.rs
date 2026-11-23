@@ -16,10 +16,15 @@ pub async fn status(
     ctx: Data<WyrmContext>,
     auth: Data<Auth>,
 ) -> WyrmResult<HttpResponse> {
-    let signed_in = match auth.sessions() {
-        Some(sessions) => sessions.authenticate(&ctx.db_pool, &req).await?.is_some(),
-        None => false,
+    let signed_in = if auth.desktop_key_valid(&req) {
+        true
+    } else {
+        match auth.sessions().ok() {
+            Some(sessions) => sessions.authenticate(&ctx.db_pool, &req).await?.is_some(),
+            None => false,
+        }
     };
+
     Ok(HttpResponse::Ok()
         .insert_header((header::CACHE_CONTROL, "no-store"))
         .json(AuthStatusResponse {

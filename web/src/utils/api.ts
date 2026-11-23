@@ -31,13 +31,14 @@ function buildUrl(base: string, params: Record<string, string | undefined>): str
 
 export const ENDPOINTS = {
   auth: {
-    verify: () => `${apiBase()}/auth/verify`,
     status: () => `${apiBase()}/auth/status`,
-    login: () => `${apiBase()}/auth/oidc/login`,
+    login: () => `${apiBase()}/auth/login`,
+    oidcLogin: () => `${apiBase()}/auth/oidc/login`,
     logout: () => `${apiBase()}/auth/logout`,
   },
   instance: {
     get: () => `${apiBase()}/instance`,
+    setup: () => `${apiBase()}/instance/setup`,
   },
   feeds: {
     list: () => `${apiBase()}/feeds`,

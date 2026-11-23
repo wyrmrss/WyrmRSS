@@ -5,6 +5,7 @@ use api_api::auth;
 /// cookie.
 pub fn public_config(cfg: &mut web::ServiceConfig) {
     cfg.route("/auth/status", web::get().to(auth::status::status))
+        .route("/auth/login", web::post().to(api_crud::auth::login))
         .route("/auth/logout", web::post().to(api_crud::auth::logout));
 
     #[cfg(feature = "oidc")]

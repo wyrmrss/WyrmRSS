@@ -26,7 +26,7 @@ use wyrm_utils::{
 #[derive(Clone, serde::Serialize)]
 pub struct ServerInfo {
     pub base_url: String,
-    pub api_key: String,
+    pub desktop_key: String,
 }
 
 static SERVER_INFO: OnceLock<ServerInfo> = OnceLock::new();
@@ -66,7 +66,8 @@ pub async fn start_backend(app: &tauri::AppHandle) -> WyrmDesktopResult<()> {
 pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
     std::fs::create_dir_all(&data_dir)?;
 
-    let api_key: String = rand::rng()
+    // Desktop is single-user: requests with this key act as the admin (user 1).
+    let desktop_key: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(32)
         .map(char::from)
@@ -79,7 +80,7 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
 
     let startup_conf = WyrmStartupConfig {
         database_connection: db_path.to_string_lossy().into_owned(),
-        api_key: Some(api_key.clone()),
+        desktop_key: Some(desktop_key.clone()),
         bind: IpAddr::V4(Ipv4Addr::LOCALHOST),
         ..Default::default()
     };
@@ -141,7 +142,7 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
 
     Ok(ServerInfo {
         base_url: format!("http://127.0.0.1:{port}"),
-        api_key,
+        desktop_key,
     })
 }
 
@@ -167,7 +168,7 @@ mod tests {
         let client = reqwest::Client::new();
         let res = client
             .get(format!("{}/api/v1/settings", info.base_url))
-            .header("x-api-key", &info.api_key)
+            .header("x-wyrm-desktop-key", &info.desktop_key)
             .send()
             .await
             .expect("request should succeed");

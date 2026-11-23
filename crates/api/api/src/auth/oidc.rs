@@ -5,14 +5,20 @@ use actix_web::{
     web::{Data, Query},
 };
 use api_utils::context::WyrmContext;
-use database::newtypes::UserId;
+use database::models::local_user::{LocalUser, LocalUserUpdateForm};
 use serde::Deserialize;
-use wyrm_auth::{Auth, session::Authenticated};
-use wyrm_utils::{error::AuthError, result::WyrmResult};
+use wyrm_auth::{Auth, oidc::CompletedLogin, session::Authenticated};
+use wyrm_utils::{
+    error::{AuthError, DatabaseError, WyrmError},
+    result::WyrmResult,
+};
 
 #[derive(Deserialize)]
 pub struct OidcLoginQuery {
     return_to: Option<String>,
+    /// Link the identity to the signed-in user instead of signing in.
+    #[serde(default)]
+    link: bool,
 }
 
 #[derive(Deserialize)]
@@ -24,9 +30,9 @@ pub struct OidcCallbackQuery {
 
 pub async fn login(query: Query<OidcLoginQuery>, auth: Data<Auth>) -> WyrmResult<HttpResponse> {
     let oidc = auth.oidc()?;
-    let return_to = query.into_inner().return_to;
+    let OidcLoginQuery { return_to, link } = query.into_inner();
 
-    let (location, cookie) = match oidc.begin_login(return_to).await {
+    let (location, cookie) = match oidc.begin_login(return_to, link).await {
         Ok((url, cookie)) => (url.to_string(), Some(cookie)),
         Err(error) => {
             tracing::warn!(%error, "OIDC login could not start");
@@ -38,9 +44,11 @@ pub async fn login(query: Query<OidcLoginQuery>, auth: Data<Auth>) -> WyrmResult
     response
         .insert_header((header::LOCATION, location))
         .insert_header((header::CACHE_CONTROL, "no-store"));
+
     if let Some(cookie) = cookie {
         response.cookie(cookie);
     }
+
     Ok(response.finish())
 }
 
@@ -63,20 +71,28 @@ pub async fn callback(
         Ok((return_to, authenticated)) => {
             response.insert_header((header::LOCATION, return_to));
 
-            if let Some(cookie) = authenticated.cookie {
-                response.cookie(cookie);
-            }
+            authenticated.set_cookie(&mut response);
         }
         Err(error) => {
             tracing::warn!(%error, "OIDC login failed");
-            response.insert_header((header::LOCATION, "/?auth_error=oidc"));
+            let location = match error {
+                WyrmError::Database(DatabaseError::UniqueViolation(_)) => {
+                    "/?auth_error=oidc_already_linked"
+                }
+                WyrmError::Auth(AuthError::OidcSubjectNotLinked(_)) => {
+                    "/?auth_error=oidc_not_linked"
+                }
+                _ => "/?auth_error=oidc",
+            };
+            response.insert_header((header::LOCATION, location));
         }
     }
 
     Ok(response.finish())
 }
 
-/// Verifies the callback with the provider, then starts a session.
+/// Verifies the callback with the provider, then links the identity to the signed-in user or
+/// starts a session for the user it's linked to.
 async fn sign_in(
     req: &HttpRequest,
     query: OidcCallbackQuery,
@@ -91,14 +107,38 @@ async fn sign_in(
         return Err(AuthError::LoginFailed("OIDC: missing state or code".into()).into());
     };
 
-    let return_to = auth.oidc()?.complete_login(req, &state, &code).await?;
+    let CompletedLogin {
+        return_to,
+        subject,
+        link,
+    } = auth.oidc()?.complete_login(req, &state, &code).await?;
 
-    let sessions = auth
-        .sessions()
-        .ok_or_else(|| AuthError::AuthMethodDisabled("sessions".into()))?;
+    let sessions = auth.sessions()?;
 
-    // TODO(#372): the user matched by oidc_subject.
-    let authenticated = sessions.create(&ctx.db_pool, UserId(1)).await?;
+    if link {
+        // Keeps the current session, so the user stays signed in.
+        let authenticated = sessions
+            .authenticate(&ctx.db_pool, req)
+            .await?
+            .ok_or_else(|| AuthError::LoginFailed("OIDC: link requires a signed-in user".into()))?;
+
+        let form = LocalUserUpdateForm {
+            username: None,
+            password_hash: None,
+            oidc_subject: Some(subject),
+        };
+
+        let mut conn = ctx.db_pool.get().await?;
+        LocalUser::update(&mut conn, authenticated.user.id, form).await?;
+
+        return Ok((return_to, authenticated));
+    }
+
+    let user = LocalUser::get_by_oidc_subject(&ctx.db_pool, &subject)
+        .await?
+        .ok_or_else(|| AuthError::OidcSubjectNotLinked(subject.clone()))?;
+
+    let authenticated = sessions.create(&ctx.db_pool, user).await?;
 
     Ok((return_to, authenticated))
 }

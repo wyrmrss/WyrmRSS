@@ -1,16 +1,19 @@
-import { type SubmitEvent, useEffect, useRef, useState } from "react";
-import { clearApiKey, fetchAuthStatus, fetchWithAuth, setApiKey, verifyApiKey } from "../../utils/auth";
+import { useEffect, useState } from "react";
+import { fetchAuthStatus, fetchWithAuth } from "../../utils/auth";
 import { ENDPOINTS } from "../../utils/api";
 import { AUTH } from "../../utils/constants";
 import { AuthContext } from "../../context/AuthContext";
 import type { AuthStatusResponse } from "../../types/AuthStatusResponse";
+import { SignInScreen } from "./SignInScreen";
 
+// Waits for /auth/status before rendering, then shows the app or the sign-in screen.
+// A 401 later on (e.g. an expired session) switches to the sign-in screen.
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  // Preserve immediate access for open instances; a protected API returning
-  // 401 locks the gate and prompts for the configured sign-in methods.
-  const [locked, setLocked] = useState(false);
+  // Null until /auth/status answers, and stays null if it can't be reached.
+  const [status, setStatus] = useState<AuthStatusResponse | null>(null);
+  const [checked, setChecked] = useState(false);
 
-  const [error, setError] = useState<string | null>(() => {
+  const [callbackError] = useState<string | null>(() => {
     const callbackError = new URLSearchParams(location.search).get(AUTH.errorParam);
     if (callbackError === "oidc") {
       return "Sign-in failed. Check that your account is allowed, then try again.";
@@ -18,33 +21,32 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (callbackError === "oidc_unavailable") {
       return "The identity provider is unavailable. Try again later.";
     }
+    if (callbackError === "oidc_not_linked") {
+      return "No account is linked to this identity. Sign in with your password and link it from your account settings.";
+    }
+    if (callbackError === "oidc_already_linked") {
+      return "This identity is already linked to another account.";
+    }
     return null;
   });
 
-  const [status, setStatus] = useState<AuthStatusResponse>({
-    methods: ["api_key"], signed_in: false,
-  });
-
-  const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Runs on mount and on lock changes, so a burst of 401s fetches status once.
   useEffect(() => {
     let active = true;
 
     void fetchAuthStatus().then((status) => {
-      if (active && status) setStatus(status);
+      if (!active) return;
+      setStatus(status);
+      setChecked(true);
     });
 
     return () => { active = false; };
-  }, [locked]);
+  }, []);
 
-  // Listener for unauthorizedEvent (wyrm:unauthorized) set when 
+  // Listener for unauthorizedEvent (wyrm:unauthorized) set when
   // API calls return a 401 response (see utils/response.ts).
   useEffect(() => {
     const handle = () => {
-      setLocked(true);
-      setStatus((current) => ({ ...current, signed_in: false }));
+      setStatus((current) => ({ methods: current?.methods ?? [], signed_in: false }));
     };
 
     window.addEventListener(AUTH.unauthorizedEvent, handle);
@@ -52,7 +54,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(AUTH.unauthorizedEvent, handle);
   }, []);
 
-  // Strip the sign-in error param once it's been read into `error`.
+  // Strip the sign-in error param once it's been read into `callbackError`.
   useEffect(() => {
     const url = new URL(location.href);
     if (url.searchParams.has(AUTH.errorParam)) {
@@ -61,72 +63,21 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  async function handleApiKeySubmit(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-
-    const key = inputRef.current?.value.trim();
-    if (!key) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const valid = await verifyApiKey(key);
-      if (valid) {
-        setApiKey(key);
-        setLocked(false);
-      } else {
-        setError("Invalid API key.");
-      }
-    } catch {
-      setError("Unable to reach the server. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function signOut() {
     const response = await fetchWithAuth(ENDPOINTS.auth.logout(), { method: "POST" });
     if (!response.ok) throw new Error("Sign-out failed. Please try again.");
-    clearApiKey();
     // A full navigation clears reader caches and returns to the sign-in screen.
     window.location.reload();
   }
 
-  if (!locked) return (
-    <AuthContext value={{ signedIn: status.signed_in, signOut }}>
+  if (!checked) return null;
+
+  // No status means the server couldn't be reached. Show the app, which reports that itself.
+  if (!status || status.signed_in) return (
+    <AuthContext value={{ signedIn: status?.signed_in ?? false, signOut }}>
       {children}
     </AuthContext>
   );
 
-  const oidcEnabled = status.methods.includes("oidc");
-  const apiKeyEnabled = status.methods.includes("api_key");
-
-  return (
-    <div className="api-key-gate">
-      <form className="api-key-form" onSubmit={handleApiKeySubmit}>
-        <h2>{oidcEnabled ? "Sign in to Wyrm" : "API Key Required"}</h2>
-        {oidcEnabled && (
-          <>
-            <p>Sign in with your identity provider to access this instance.</p>
-            <a className="btn btn-primary" href={`${ENDPOINTS.auth.login()}?${new URLSearchParams({ return_to: location.pathname + location.search + location.hash })}`}>
-              Sign in with OpenID Connect
-            </a>
-          </>
-        )}
-        {apiKeyEnabled && (
-          <>
-            <p>{oidcEnabled ? "Or connect with an API key." : "This instance of Wyrm requires an API key to access."}</p>
-            <input ref={inputRef} type="password" aria-label="API key" placeholder="Enter API key" autoFocus={!oidcEnabled} disabled={loading} />
-          </>
-        )}
-        {error && <p className="api-key-error" role="alert">{error}</p>}
-        {apiKeyEnabled && (
-          <button type="submit" className={oidcEnabled ? "btn" : "btn btn-primary"} disabled={loading}>
-            {loading ? "Verifying…" : "Connect"}
-          </button>
-        )}
-      </form>
-    </div>
-  );
+  return <SignInScreen methods={status.methods} callbackError={callbackError} />;
 }

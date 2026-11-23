@@ -1,12 +1,12 @@
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { setApiOrigin } from "./api";
-import { setApiKey } from "./auth";
+import { setDesktopKey } from "./auth";
 import { TIMING } from "./constants";
 
 interface ServerInfo {
   base_url: string;
-  api_key: string;
+  desktop_key: string;
 }
 
 // The embedded backend starts asynchronously after the window opens and
@@ -40,5 +40,5 @@ export async function initDesktopRuntime(): Promise<void> {
   if (!isTauri()) return;
   const info = await waitForServerInfo();
   setApiOrigin(info.base_url);
-  setApiKey(info.api_key);
+  setDesktopKey(info.desktop_key);
 }

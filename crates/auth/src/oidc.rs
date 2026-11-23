@@ -42,6 +42,15 @@ type ProviderClient = CoreClient<
     EndpointMaybeSet, // userinfo
 >;
 
+/// What a finished OIDC login hands back to the callback.
+pub struct CompletedLogin {
+    pub return_to: String,
+    /// The provider's `sub` claim for this user.
+    pub subject: String,
+    /// Started as a link: attach `subject` to the signed-in user.
+    pub link: bool,
+}
+
 /// OIDC sign-in: verifies who the user is at the provider; never creates sessions.
 pub struct Oidc {
     /// Client for discovery and token exchange; never follows redirects.
@@ -122,6 +131,7 @@ impl Oidc {
         Ok(None)
     }
 
+    /// Builds an OIDC client from freshly discovered provider metadata.
     async fn client(&self) -> WyrmResult<ProviderClient> {
         let metadata = self.discover().await?;
 
@@ -139,11 +149,12 @@ impl Oidc {
         )
     }
 
-    /// Builds an OIDC client from freshly discovered provider metadata.
     /// Starts a login: returns the provider URL to redirect to and the sealed login cookie.
+    /// With `link`, the callback links the identity to the signed-in user instead.
     pub async fn begin_login(
         &self,
         return_to: Option<String>,
+        link: bool,
     ) -> WyrmResult<(Url, Cookie<'static>)> {
         let client = self.client().await?;
 
@@ -166,6 +177,7 @@ impl Oidc {
             return_to: return_to
                 .filter(|path| path.len() <= RETURN_PATH_LIMIT && local_path(path))
                 .unwrap_or_else(|| "/".into()),
+            link,
         };
 
         Ok((url, self.seal_login(&pending)))
@@ -204,13 +216,13 @@ impl Oidc {
     }
 
     /// Finishes a login: verifies the callback against the login cookie, returns the return_to
-    /// path.
+    /// path and the user's subject.
     pub async fn complete_login(
         &self,
         req: &HttpRequest,
         state: &str,
         code: &str,
-    ) -> WyrmResult<String> {
+    ) -> WyrmResult<CompletedLogin> {
         let cookie = req
             .cookie(self.login_cookie_name())
             .ok_or_else(|| login_failed("missing login cookie"))?;
@@ -250,7 +262,11 @@ impl Oidc {
             return Err(login_failed(format!("subject {subject} not allowed")));
         }
 
-        Ok(pending.return_to)
+        Ok(CompletedLogin {
+            return_to: pending.return_to,
+            subject: subject.to_owned(),
+            link: pending.link,
+        })
     }
 
     fn open_login(&self, cookie: Cookie<'static>, state: &str) -> Option<PendingLogin> {
@@ -292,6 +308,8 @@ struct PendingLogin {
     verifier: PkceCodeVerifier,
     expires_at: i64,
     return_to: String,
+    /// Link the identity to the signed-in user rather than sign in with it.
+    link: bool,
 }
 
 pub(crate) fn invalid_config(message: impl Display) -> WyrmError {
@@ -380,6 +398,7 @@ mod tests {
             verifier: PkceCodeVerifier::new("verifier".into()),
             expires_at,
             return_to: "/feeds".into(),
+            link: false,
         }
     }
 

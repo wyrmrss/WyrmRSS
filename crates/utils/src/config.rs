@@ -24,8 +24,9 @@ pub struct WyrmStartupConfig {
     /// Externally reachable URL of this instance, e.g. `https://rss.example.com`.
     /// Required when a session-based sign-in method (OIDC) is configured.
     pub public_url: Option<String>,
-    /// API key
-    pub api_key: Option<String>,
+    /// The key set by the desktop build. Used to bypass authentication entirely.
+    #[serde(skip)]
+    pub desktop_key: Option<String>,
     /// OIDC provider's issuer URL, e.g. `https://sso.example.com/realms/wyrm`.
     pub oidc_issuer_url: Option<String>,
     /// Client ID registered for Wyrm at the OIDC provider.

@@ -1,17 +1,12 @@
 import { ENDPOINTS } from "./api";
-import { AUTH, STORAGE_KEYS } from "./constants";
+import { AUTH } from "./constants";
 import type { AuthStatusResponse } from "../types/AuthStatusResponse";
 
-export function getApiKey(): string | null {
-  return import.meta.env.WYRM_API_KEY || localStorage.getItem(STORAGE_KEYS.apiKey);
-}
+// The desktop app's per-launch key. Kept in memory only, since a new one is made every launch.
+let desktopKey: string | null = null;
 
-export function setApiKey(key: string): void {
-  localStorage.setItem(STORAGE_KEYS.apiKey, key);
-}
-
-export function clearApiKey(): void {
-  localStorage.removeItem(STORAGE_KEYS.apiKey);
+export function setDesktopKey(key: string): void {
+  desktopKey = key;
 }
 
 // A reverse proxy answers with these when the backend behind it is down.
@@ -21,9 +16,8 @@ const GATEWAY_ERRORS = new Set([502, 503]);
 // Raises "wyrm:unreachable" when the server can't be reached and
 // "wyrm:reachable" once it answers again (see ServerStatusBanner).
 export async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Response> {
-  const key = getApiKey();
   const headers = new Headers(init.headers);
-  if (key) headers.set(AUTH.apiKeyHeader, `${key}`);
+  if (desktopKey) headers.set(AUTH.desktopKeyHeader, desktopKey);
   if (!["GET", "HEAD", "OPTIONS"].includes((init.method ?? "GET").toUpperCase())) {
     headers.set(AUTH.csrfHeader, AUTH.csrfValue);
   }
@@ -43,7 +37,6 @@ export async function fetchWithAuth(url: string, init: RequestInit = {}): Promis
 }
 
 export function handleUnauthorized(): void {
-  clearApiKey();
   window.dispatchEvent(new Event(AUTH.unauthorizedEvent));
 }
 
@@ -52,14 +45,6 @@ export async function fetchAuthStatus(): Promise<AuthStatusResponse | null> {
     const response = await fetchWithAuth(ENDPOINTS.auth.status());
     return response.ok ? await response.json() as AuthStatusResponse : null;
   } catch {
-    // Keep the existing API-key flow available if discovery is unreachable.
     return null;
   }
-}
-
-export async function verifyApiKey(key: string): Promise<boolean> {
-  const res = await fetch(ENDPOINTS.auth.verify(), {
-    headers: { [AUTH.apiKeyHeader]: `${key}` },
-  });
-  return res.ok;
 }
