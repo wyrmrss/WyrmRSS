@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, web};
+use actix_web::web;
 use api_api::auth;
 
 /// Reachable without signing in: the sign-in flow, and logout so an expired session can clear its
@@ -11,11 +11,4 @@ pub fn public_config(cfg: &mut web::ServiceConfig) {
     #[cfg(feature = "oidc")]
     cfg.route("/auth/oidc/login", web::get().to(auth::oidc::login))
         .route("/auth/oidc/callback", web::get().to(auth::oidc::callback));
-}
-
-pub fn config(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::scope("/auth").route(
-        "/verify",
-        web::get().to(|| async { HttpResponse::Ok().finish() }),
-    ));
 }

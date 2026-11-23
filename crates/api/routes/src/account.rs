@@ -1,0 +1,13 @@
+use actix_web::web;
+use api_api::account;
+
+pub fn config(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/account")
+            .route("", web::get().to(account::get))
+            .route(
+                "/password",
+                web::put().to(api_crud::account::update_password),
+            ),
+    );
+}
