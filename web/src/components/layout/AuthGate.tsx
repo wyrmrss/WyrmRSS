@@ -4,6 +4,7 @@ import { ENDPOINTS } from "../../utils/api";
 import { AUTH } from "../../utils/constants";
 import { AuthContext } from "../../context/AuthContext";
 import type { AuthStatusResponse } from "../../types/AuthStatusResponse";
+import { SignInScreen } from "./SignInScreen";
 
 // Waits for /auth/status before rendering, then shows the app or the sign-in screen.
 // A 401 later on (e.g. an expired session) switches to the sign-in screen.
@@ -12,7 +13,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatusResponse | null>(null);
   const [checked, setChecked] = useState(false);
 
-  const [error] = useState<string | null>(() => {
+  const [callbackError] = useState<string | null>(() => {
     const callbackError = new URLSearchParams(location.search).get(AUTH.errorParam);
     if (callbackError === "oidc") {
       return "Sign-in failed. Check that your account is allowed, then try again.";
@@ -53,7 +54,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(AUTH.unauthorizedEvent, handle);
   }, []);
 
-  // Strip the sign-in error param once it's been read into `error`.
+  // Strip the sign-in error param once it's been read into `callbackError`.
   useEffect(() => {
     const url = new URL(location.href);
     if (url.searchParams.has(AUTH.errorParam)) {
@@ -78,22 +79,5 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     </AuthContext>
   );
 
-  const oidcEnabled = status.methods.includes("oidc");
-
-  return (
-    <div className="api-key-gate">
-      <div className="api-key-form">
-        <h2>Sign in to Wyrm</h2>
-        {oidcEnabled && (
-          <>
-            <p>Sign in with your identity provider to access this instance.</p>
-            <a className="btn btn-primary" href={`${ENDPOINTS.auth.login()}?${new URLSearchParams({ return_to: location.pathname + location.search + location.hash })}`}>
-              Sign in with OpenID Connect
-            </a>
-          </>
-        )}
-        {error && <p className="api-key-error" role="alert">{error}</p>}
-      </div>
-    </div>
-  );
+  return <SignInScreen methods={status.methods} callbackError={callbackError} />;
 }

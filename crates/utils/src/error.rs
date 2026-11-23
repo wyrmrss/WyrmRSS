@@ -167,7 +167,7 @@ impl WyrmError {
                 "authentication is misconfigured on the server, see the server logs"
             }
             WyrmError::Auth(AuthError::InvalidSetupToken) => "invalid setup token",
-            WyrmError::Auth(AuthError::InvalidCredentials) => "invalid credentials",
+            WyrmError::Auth(AuthError::InvalidCredentials) => "invalid username or password",
             WyrmError::Auth(AuthError::AuthMethodDisabled(_)) => "not found",
             WyrmError::Auth(AuthError::CsrfCheckFailed) => "csrf check failed",
             WyrmError::Auth(AuthError::LoginFailed(_)) => "login failed",
