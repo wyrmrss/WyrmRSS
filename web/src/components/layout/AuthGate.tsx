@@ -5,10 +5,12 @@ import { AUTH } from "../../utils/constants";
 import { AuthContext } from "../../context/AuthContext";
 import type { AuthStatusResponse } from "../../types/AuthStatusResponse";
 
+// Waits for /auth/status before rendering, then shows the app or the sign-in screen.
+// A 401 later on (e.g. an expired session) switches to the sign-in screen.
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  // Preserve immediate access for open instances; a protected API returning
-  // 401 locks the gate and prompts for the configured sign-in methods.
-  const [locked, setLocked] = useState(false);
+  // Null until /auth/status answers, and stays null if it can't be reached.
+  const [status, setStatus] = useState<AuthStatusResponse | null>(null);
+  const [checked, setChecked] = useState(false);
 
   const [error] = useState<string | null>(() => {
     const callbackError = new URLSearchParams(location.search).get(AUTH.errorParam);
@@ -27,27 +29,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return null;
   });
 
-  const [status, setStatus] = useState<AuthStatusResponse>({
-    methods: [], signed_in: false,
-  });
-
-  // Runs on mount and on lock changes, so a burst of 401s fetches status once.
   useEffect(() => {
     let active = true;
 
     void fetchAuthStatus().then((status) => {
-      if (active && status) setStatus(status);
+      if (!active) return;
+      setStatus(status);
+      setChecked(true);
     });
 
     return () => { active = false; };
-  }, [locked]);
+  }, []);
 
-  // Listener for unauthorizedEvent (wyrm:unauthorized) set when 
+  // Listener for unauthorizedEvent (wyrm:unauthorized) set when
   // API calls return a 401 response (see utils/response.ts).
   useEffect(() => {
     const handle = () => {
-      setLocked(true);
-      setStatus((current) => ({ ...current, signed_in: false }));
+      setStatus((current) => ({ methods: current?.methods ?? [], signed_in: false }));
     };
 
     window.addEventListener(AUTH.unauthorizedEvent, handle);
@@ -71,8 +69,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     window.location.reload();
   }
 
-  if (!locked) return (
-    <AuthContext value={{ signedIn: status.signed_in, signOut }}>
+  if (!checked) return null;
+
+  // No status means the server couldn't be reached. Show the app, which reports that itself.
+  if (!status || status.signed_in) return (
+    <AuthContext value={{ signedIn: status?.signed_in ?? false, signOut }}>
       {children}
     </AuthContext>
   );
