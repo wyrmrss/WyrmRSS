@@ -1,10 +1,10 @@
 use actix_web::web::{Data, Json, Path};
-use api_utils::context::WyrmContext;
+use api_utils::{context::WyrmContext, responses::posts::UpdatePostResponse};
 use database::{
     models::post::{Post, PostUpdateForm},
     newtypes::PostId,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_utils::result::WyrmResult;
 
@@ -13,13 +13,6 @@ use wyrm_utils::result::WyrmResult;
 pub struct UpdatePost {
     bookmarked: Option<bool>,
     is_read: Option<bool>,
-}
-
-#[derive(Serialize, ts_rs::TS)]
-#[ts(export)]
-pub struct UpdatePostResponse {
-    pub post: Post,
-    pub feed_unread_count: i64,
 }
 
 pub async fn update(

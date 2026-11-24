@@ -4,7 +4,7 @@ use actix_web::{
 };
 use api_utils::{
     context::WyrmContext,
-    response::{SettingsResponse, XmlResponse},
+    responses::{settings::SettingsResponse, xml::XmlResponse},
 };
 use database::{
     models::{

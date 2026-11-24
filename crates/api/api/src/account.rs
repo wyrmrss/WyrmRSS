@@ -1,19 +1,8 @@
 use actix_web::web::{Data, Json};
-use api_utils::context::WyrmContext;
-use database::{models::local_user::LocalUser, newtypes::UserId};
-use serde::Serialize;
+use api_utils::{context::WyrmContext, responses::account::AccountResponse};
+use database::models::local_user::LocalUser;
 use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_utils::result::WyrmResult;
-
-#[derive(Serialize, ts_rs::TS)]
-#[ts(export)]
-pub struct AccountResponse {
-    id: UserId,
-    username: String,
-    has_password: bool,
-    oidc_linked: bool,
-    is_admin: bool,
-}
 
 pub async fn get(
     user: AuthenticatedUser,
