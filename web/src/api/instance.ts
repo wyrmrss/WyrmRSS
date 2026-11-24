@@ -1,12 +1,12 @@
 import type { InstanceSetup } from "../types/InstanceSetup";
-import type { LocalInstanceResponse } from "../types/LocalInstanceResponse";
+import type { InstanceStatusResponse } from "../types/InstanceStatusResponse";
 import { ENDPOINTS } from "../utils/api";
 import { fetchWithAuth } from "../utils/auth";
 import { json, noContent } from "../utils/response";
 
 // Public endpoint, so no auth header: it's used before anyone can sign in.
-export const getLocalInstance = (): Promise<LocalInstanceResponse> =>
-  fetch(ENDPOINTS.instance.get()).then(json<LocalInstanceResponse>);
+export const getLocalInstance = (): Promise<InstanceStatusResponse> =>
+  fetch(ENDPOINTS.instance.get()).then(json<InstanceStatusResponse>);
 
 /** Creates the owner account; the response sets the session cookie. */
 // fetchWithAuth for the CSRF header the server checks on POSTs.

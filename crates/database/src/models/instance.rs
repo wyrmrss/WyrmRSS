@@ -1,6 +1,5 @@
 use crate::{
-    DatabaseConn,
-    DatabasePool,
+    DatabaseConn, DatabasePool,
     models::local_user::{LocalUser, LocalUserUpdateForm},
     newtypes::UserId,
     schema::{self, local_instance},
@@ -48,6 +47,17 @@ impl LocalInstance {
             .await
             .map_err(WyrmError::from)
     }
+
+    pub async fn update(pool: &DatabasePool, form: LocalInstanceUpdateForm) -> WyrmResult<Self> {
+        let mut conn = pool.get().await?;
+        diesel::update(local_instance::table)
+            .set(form)
+            .returning(Self::as_returning())
+            .get_result(&mut conn)
+            .await
+            .map_err(WyrmError::from)
+    }
+
     /// Marks the instance as set up; false if it already was.
     pub async fn claim_setup(conn: &mut DatabaseConn) -> WyrmResult<bool> {
         let updated =
@@ -83,4 +93,10 @@ impl LocalInstance {
         })
         .await
     }
+}
+
+#[derive(AsChangeset)]
+#[diesel(table_name = schema::local_instance)]
+pub struct LocalInstanceUpdateForm {
+    pub registration_mode: RegistrationMode,
 }

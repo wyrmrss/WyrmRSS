@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { getLocalInstance } from "../../api/instance";
 import { InstanceContext } from "../../context/InstanceContext";
-import type { LocalInstanceResponse } from "../../types/LocalInstanceResponse";
+import type { InstanceStatusResponse } from "../../types/InstanceStatusResponse";
 import { SetupScreen } from "./SetupScreen";
 
 // Sits outside AuthGate, since nobody can sign in before setup.
 export function SetupGate({ children }: { children: React.ReactNode }) {
-  const [instance, setInstance] = useState<LocalInstanceResponse | null>(null);
+  const [instance, setInstance] = useState<InstanceStatusResponse | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 use actix_web::{middleware::from_fn, web};
 
 mod account;
+mod admin;
 pub mod auth;
 mod feeds;
 mod folders;
@@ -20,6 +21,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
                 web::scope("")
                     .wrap(from_fn(wyrm_auth::middleware::middleware))
                     .configure(account::config)
+                    .configure(admin::config)
                     .configure(posts::config)
                     .configure(feeds::config)
                     .configure(webhooks::config)
