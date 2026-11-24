@@ -8,7 +8,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .route("", web::delete().to(api_crud::account::delete))
             .route(
                 "/password",
-                web::put().to(api_crud::account::update_password),
+                web::post().to(api_crud::account::update_password),
             ),
     );
 }
