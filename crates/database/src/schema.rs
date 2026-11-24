@@ -14,6 +14,10 @@ pub mod sql_types {
     pub struct ReadMode;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "registration_mode"))]
+    pub struct RegistrationMode;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "webhook_kind"))]
     pub struct WebhookKind;
 }
@@ -88,9 +92,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::RegistrationMode;
+
     local_instance (is_singleton) {
         is_singleton -> Bool,
         is_setup -> Bool,
+        registration_mode -> RegistrationMode,
     }
 }
 

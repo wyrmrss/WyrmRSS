@@ -1,19 +1,17 @@
 import { type SubmitEvent, useEffect, useState } from "react";
+import { useNewPassword } from "../../hooks/useNewPassword";
 import { useTheme } from "../../hooks/useTheme";
+import { startOidcLink } from "../../api/auth";
 import { setupInstance } from "../../api/instance";
-import { ENDPOINTS } from "../../utils/api";
 import { fetchAuthStatus } from "../../utils/auth";
-
-// Same as MIN_LENGTH in crates/auth/src/password.rs, which enforces it.
-const MIN_PASSWORD_LENGTH = 8;
+import { AUTH } from "../../utils/constants";
+import { NewPasswordFields } from "./NewPasswordFields";
 
 export function SetupScreen() {
   const { theme } = useTheme();
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const newPassword = useNewPassword();
   const [oidcEnabled, setOidcEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,18 +22,15 @@ export function SetupScreen() {
     });
   }, []);
 
-  const passwordsMatch = password !== "" && password === confirmPassword;
-  const showMismatch = confirmPassword !== "" && !passwordsMatch;
-  const passwordLongEnough = [...password].length >= MIN_PASSWORD_LENGTH;
-  const ready = token.trim() !== "" && username.trim() !== "" && passwordLongEnough && passwordsMatch;
+  const ready = token.trim() !== "" && username.trim() !== "" && newPassword.ready;
 
   async function createAccount(linkOidc: boolean) {
     setSubmitting(true);
     setError(null);
     try {
-      await setupInstance({ token, username, password });
+      await setupInstance({ token, username, password: newPassword.password });
       // Signed in now: reload so SetupGate sees the finished setup, or continue to OIDC.
-      if (linkOidc) window.location.assign(`${ENDPOINTS.auth.oidcLogin()}?link=true`);
+      if (linkOidc) startOidcLink();
       else window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Setup failed.");
@@ -47,8 +42,6 @@ export function SetupScreen() {
     e.preventDefault();
     if (ready && !submitting) void createAccount(false);
   }
-
-  const passwordType = showPassword ? "text" : "password";
 
   return (
     <div className="api-key-gate">
@@ -79,38 +72,12 @@ export function SetupScreen() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
-            placeholder="3 to 32 letters, digits or _"
+            placeholder={`${AUTH.usernameLength.min} to ${AUTH.usernameLength.max} letters, digits or _`}
           />
         </label>
 
-        <label className="setup-field">
-          Password
-          <span className="setup-password">
-            <input
-              type={passwordType}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
-            />
-            <button type="button" className="btn btn-ghost" onClick={() => setShowPassword((shown) => !shown)}>
-              {showPassword ? "Hide" : "Show"}
-            </button>
-          </span>
-        </label>
+        <NewPasswordFields newPassword={newPassword} />
 
-        <label className="setup-field">
-          Confirm password
-          <input
-            type={passwordType}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            autoComplete="new-password"
-            aria-invalid={showMismatch}
-          />
-        </label>
-
-        {showMismatch && <p className="api-key-error">The passwords don't match.</p>}
         <p className="setup-note">Any existing feeds, folders and settings will belong to this account.</p>
         {error && <p className="api-key-error" role="alert">{error}</p>}
 
@@ -120,7 +87,7 @@ export function SetupScreen() {
         {oidcEnabled && (
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn"
             disabled={!ready || submitting}
             onClick={() => void createAccount(true)}
           >

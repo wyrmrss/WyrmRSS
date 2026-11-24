@@ -3,11 +3,12 @@ use actix_web::{
     HttpResponse,
     web::{Data, Json},
 };
-use api_utils::context::WyrmContext;
-use database::models::instance::LocalInstance;
+use api_utils::{context::WyrmContext, responses::instance::LocalInstanceConfigResponse};
+use database::models::instance::{LocalInstance, LocalInstanceUpdateForm, RegistrationMode};
 use serde::Deserialize;
 use wyrm_auth::{
     Auth,
+    authenticated_user::AuthenticatedUser,
     password::{hash_password, validate_password},
     username::normalize_username,
 };
@@ -25,6 +26,32 @@ pub struct InstanceSetup {
     username: String,
     /// The password for the admin/owner user.
     password: String,
+}
+
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct UpdateLocalInstance {
+    /// Who can create an account.
+    registration_mode: RegistrationMode,
+}
+
+/// Updates instance-level configuration. Admins only.
+pub async fn update(
+    user: AuthenticatedUser,
+    Json(data): Json<UpdateLocalInstance>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<LocalInstanceConfigResponse>> {
+    ctx.deny_in_demo()?;
+
+    user.require_admin()?;
+
+    let form = LocalInstanceUpdateForm {
+        registration_mode: data.registration_mode,
+    };
+
+    let instance = LocalInstance::update(&ctx.db_pool, form).await?;
+
+    Ok(Json(instance.into()))
 }
 
 /// Sets up a new instance: checks the setup token from the server log, gives the

@@ -39,6 +39,9 @@ export const AUTH = {
   csrfValue: "1",
   unauthorizedEvent: "wyrm:unauthorized",
   errorParam: "auth_error",
+  // Mirror the limits the server enforces in crates/auth/src/password.rs and username.rs.
+  minPasswordLength: 8,
+  usernameLength: { min: 3, max: 32 },
 } as const;
 
 export const LAYOUT = {

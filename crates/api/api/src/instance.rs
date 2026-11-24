@@ -1,18 +1,25 @@
 use actix_web::web::{Data, Json};
-use api_utils::context::WyrmContext;
+use api_utils::{
+    context::WyrmContext,
+    responses::instance::{LocalInstanceConfigResponse, LocalInstanceStatusResponse},
+};
 use database::models::instance::LocalInstance;
-use serde::Serialize;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_utils::result::WyrmResult;
 
-#[derive(Serialize, ts_rs::TS)]
-#[ts(export)]
-pub struct LocalInstanceResponse {
-    is_setup: bool,
+/// Public, so the frontend can read the setup and sign-in configuration.
+pub async fn status(ctx: Data<WyrmContext>) -> WyrmResult<Json<LocalInstanceStatusResponse>> {
+    let instance = LocalInstance::get(&ctx.db_pool).await?;
+    Ok(Json(instance.into()))
 }
 
-pub async fn get(ctx: Data<WyrmContext>) -> WyrmResult<Json<LocalInstanceResponse>> {
+/// Admin-only. Returns the instance-wide configuration.
+pub async fn get(
+    user: AuthenticatedUser,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<LocalInstanceConfigResponse>> {
+    user.require_admin()?;
+
     let instance = LocalInstance::get(&ctx.db_pool).await?;
-    Ok(Json(LocalInstanceResponse {
-        is_setup: instance.is_setup,
-    }))
+    Ok(Json(instance.into()))
 }

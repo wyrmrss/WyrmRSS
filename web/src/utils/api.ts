@@ -33,11 +33,12 @@ export const ENDPOINTS = {
   auth: {
     status: () => `${apiBase()}/auth/status`,
     login: () => `${apiBase()}/auth/login`,
+    register: () => `${apiBase()}/auth/register`,
     oidcLogin: () => `${apiBase()}/auth/oidc/login`,
     logout: () => `${apiBase()}/auth/logout`,
   },
   instance: {
-    get: () => `${apiBase()}/instance`,
+    status: () => `${apiBase()}/instance/status`,
     setup: () => `${apiBase()}/instance/setup`,
   },
   feeds: {
@@ -76,6 +77,14 @@ export const ENDPOINTS = {
     create: () => `${apiBase()}/folders`,
     update: (id: FolderId) => `${apiBase()}/folders/${id}`,
     delete: (id: FolderId) => `${apiBase()}/folders/${id}`,
+  },
+  admin: {
+    instance: () => `${apiBase()}/admin/instance`,
+  },
+  account: {
+    get: () => `${apiBase()}/account`,
+    password: () => `${apiBase()}/account/password`,
+    delete: () => `${apiBase()}/account`,
   },
   settings: {
     get: () => `${apiBase()}/settings`,

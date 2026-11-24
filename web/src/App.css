@@ -789,6 +789,18 @@ body.reader-resizing {
   }
 }
 
+.settings-tab-group {
+  margin-top: 10px;
+  padding: 14px 10px 4px;
+  border-top: 1px solid var(--border);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.7;
+}
+
 .settings-app-version {
   margin-top: auto;
   padding-top: 32px;
@@ -828,6 +840,31 @@ body.reader-resizing {
     padding-top: 0;
     margin-top: 0;
   }
+}
+
+/* A form section inside the Account settings. Its title is the form's first child, which drops
+   the title's divider, so the form draws it instead. */
+.account-form {
+  margin-top: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Same size and colour as the settings labels, with the username in the heading colour. */
+.account-signed-in {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text);
+
+  strong {
+    color: var(--text-h);
+  }
+}
+
+/* Always rendered with room for one message, so showing one doesn't move what's below. */
+.account-form-status {
+  min-height: 0.9rem;
+  margin-top: -6px;
 }
 
 .opml-dropzone {
@@ -1930,6 +1967,28 @@ body.reader-resizing {
   }
 }
 
+.link-button {
+  align-self: center;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: color 0.15s;
+
+  &:hover:not(:disabled) {
+    color: var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 .setup-logo {
   align-self: center;
   width: 55%;
@@ -1940,9 +1999,7 @@ body.reader-resizing {
 .api-key-form h2.setup-title {
   text-align: center;
   font-size: 1.1rem;
-}
-
-.api-key-form p.setup-note {
+}.api-key-form p.setup-note {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -2813,6 +2870,18 @@ body.reader-resizing {
     flex-shrink: 0;
     padding: 8px 12px;
     white-space: nowrap;
+  }
+
+  /* No room for a heading in the tab row, so it becomes a divider. */
+  .settings-tab-group {
+    flex-shrink: 0;
+    width: 1px;
+    margin: 6px 4px;
+    padding: 0;
+    border: none;
+    font-size: 0;
+    background: var(--border);
+    opacity: 1;
   }
 
   .settings-content {

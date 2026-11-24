@@ -70,9 +70,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use crate::models::instance::RegistrationModeMapping;
+
     local_instance (is_singleton) {
         is_singleton -> Bool,
         is_setup -> Bool,
+        registration_mode -> RegistrationModeMapping,
     }
 }
 

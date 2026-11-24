@@ -1,5 +1,5 @@
 use actix_web::web::{Data, Json};
-use api_utils::{context::WyrmContext, response::SettingsResponse};
+use api_utils::{context::WyrmContext, responses::settings::SettingsResponse};
 use database::{
     models::{
         feed::Feed,
