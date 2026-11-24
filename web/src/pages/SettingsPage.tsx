@@ -7,10 +7,12 @@ import { Credentials } from "../components/settings/Credentials";
 import { Feeds } from "../components/settings/Feeds";
 import { Folders } from "../components/settings/Folders";
 import { General } from "../components/settings/General";
+import { Instance } from "../components/settings/Instance";
 import { Integrations } from "../components/settings/Integrations";
 import { Opml } from "../components/settings/Opml";
 import { Shortcuts } from "../components/settings/Shortcuts";
 import { Webhooks } from "../components/settings/Webhooks";
+import { useAccount } from "../hooks/useAccount";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { version } from "../../package.json";
 
@@ -24,7 +26,8 @@ type Tab =
   | "folders"
   | "webhooks"
   | "opml"
-  | "account";
+  | "account"
+  | "instance";
 
 export function SettingsPage() {
   // `?tab=account` opens the account section, e.g. after linking OIDC.
@@ -35,6 +38,9 @@ export function SettingsPage() {
   const { signedIn } = useContext(AuthContext);
   // Desktop is signed in through its key and has no account to manage.
   const showAccount = signedIn && !isTauri();
+  const { data: account } = useAccount();
+  // Desktop is single-user, so registration doesn't apply there.
+  const showAdmin = showAccount && account?.is_admin === true;
 
   return (
     <div className="settings-page">
@@ -103,6 +109,17 @@ export function SettingsPage() {
             Account
           </button>
         )}
+        {showAdmin && (
+          <>
+            <div className="settings-tab-group">Admin</div>
+            <button
+              className={`settings-tab${tab === "instance" ? " active" : ""}`}
+              onClick={() => setTab("instance")}
+            >
+              Instance
+            </button>
+          </>
+        )}
       </div>
 
       <div className="settings-content">
@@ -116,6 +133,7 @@ export function SettingsPage() {
         {tab === "webhooks" && <Webhooks />}
         {tab === "opml" && <Opml />}
         {tab === "account" && showAccount && <Account />}
+        {tab === "instance" && showAdmin && <Instance />}
         <div className="settings-app-version">v{version}</div>
       </div>
     </div>

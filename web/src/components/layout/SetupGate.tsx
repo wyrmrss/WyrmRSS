@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getLocalInstance } from "../../api/instance";
+import { getLocalInstanceStatus } from "../../api/instance";
 import { InstanceContext } from "../../context/InstanceContext";
 import type { LocalInstanceStatusResponse } from "../../types/LocalInstanceStatusResponse";
 import { SetupScreen } from "./SetupScreen";
@@ -10,7 +10,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getLocalInstance()
+    getLocalInstanceStatus()
       .then(setInstance)
       // If the request fails, show the app; its own requests will surface the error.
       .catch(() => setFailed(true));

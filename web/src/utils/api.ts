@@ -38,7 +38,7 @@ export const ENDPOINTS = {
     logout: () => `${apiBase()}/auth/logout`,
   },
   instance: {
-    get: () => `${apiBase()}/instance`,
+    status: () => `${apiBase()}/instance/status`,
     setup: () => `${apiBase()}/instance/setup`,
   },
   feeds: {
@@ -77,6 +77,9 @@ export const ENDPOINTS = {
     create: () => `${apiBase()}/folders`,
     update: (id: FolderId) => `${apiBase()}/folders/${id}`,
     delete: (id: FolderId) => `${apiBase()}/folders/${id}`,
+  },
+  admin: {
+    instance: () => `${apiBase()}/admin/instance`,
   },
   account: {
     get: () => `${apiBase()}/account`,
