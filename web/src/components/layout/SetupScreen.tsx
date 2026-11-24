@@ -87,7 +87,7 @@ export function SetupScreen() {
         {oidcEnabled && (
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn"
             disabled={!ready || submitting}
             onClick={() => void createAccount(true)}
           >
