@@ -71,7 +71,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     const response = await fetchWithAuth(ENDPOINTS.auth.logout(), { method: "POST" });
     if (!response.ok) throw new Error("Sign-out failed. Please try again.");
     // A full navigation clears reader caches and returns to the sign-in screen.
-    window.location.reload();
+    window.location.assign("/");
   }
 
   if (!checked) return null;
