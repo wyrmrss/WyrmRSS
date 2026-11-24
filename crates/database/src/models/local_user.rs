@@ -141,3 +141,80 @@ pub struct LocalUserUpdateForm {
     /// The OIDC provider's `sub`. Replaces any subject already linked.
     pub oidc_subject: Option<String>,
 }
+
+#[cfg(all(test, feature = "postgres"))]
+mod tests {
+    use super::*;
+    use crate::setup_test_db;
+
+    /// Unique per run because the test database is shared across concurrent tests.
+    fn unique_username() -> String {
+        format!(
+            "user_{}",
+            Utc::now()
+                .timestamp_nanos_opt()
+                .expect("timestamp in range")
+        )
+    }
+
+    async fn create_user(pool: &DatabasePool, username: String) -> WyrmResult<LocalUser> {
+        LocalUser::create(
+            pool,
+            LocalUserInsertForm {
+                username,
+                password_hash: "hash".into(),
+            },
+        )
+        .await
+    }
+
+    /// User 1 is the only admin in the test database.
+    #[tokio::test]
+    async fn delete_refuses_the_only_admin() {
+        let pool = setup_test_db().await;
+        assert!(
+            matches!(
+                LocalUser::delete(&pool, UserId(1)).await,
+                Err(WyrmError::Database(DatabaseError::Conflict(_)))
+            ),
+            "deleting the only admin should conflict"
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_removes_a_regular_user() {
+        let pool = setup_test_db().await;
+        let user = create_user(&pool, unique_username())
+            .await
+            .expect("create should succeed");
+
+        LocalUser::delete(&pool, user.id)
+            .await
+            .expect("delete should succeed");
+        let found = LocalUser::get_by_username(&pool, &user.username)
+            .await
+            .expect("lookup should succeed");
+        assert!(found.is_none(), "user should be gone");
+    }
+
+    #[tokio::test]
+    async fn create_refuses_a_taken_username() {
+        let pool = setup_test_db().await;
+        let username = unique_username();
+        let user = create_user(&pool, username.clone())
+            .await
+            .expect("create should succeed");
+
+        assert!(
+            matches!(
+                create_user(&pool, username).await,
+                Err(WyrmError::Database(DatabaseError::UniqueViolation(_)))
+            ),
+            "second user with the same username should be refused"
+        );
+
+        LocalUser::delete(&pool, user.id)
+            .await
+            .expect("should delete user");
+    }
+}

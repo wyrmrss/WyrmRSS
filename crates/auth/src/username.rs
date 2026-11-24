@@ -19,3 +19,36 @@ pub fn normalize_username(input: &str) -> WyrmResult<String> {
     }
     Ok(username)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_and_normalizes_valid_usernames() {
+        let cases = [
+            ("  Alice_01 ", "alice_01"),
+            ("abc", "abc"),
+            (&"a".repeat(MAX_LENGTH), &"a".repeat(MAX_LENGTH)),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(
+                normalize_username(input).expect("should be valid"),
+                expected,
+                "input {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_usernames() {
+        let too_long = "a".repeat(MAX_LENGTH + 1);
+        let cases = ["ab", "   ", &too_long, "al ice", "al-ice", "élise"];
+        for input in cases {
+            assert!(
+                matches!(normalize_username(input), Err(WyrmError::InvalidInput(_))),
+                "input {input:?} should be rejected"
+            );
+        }
+    }
+}

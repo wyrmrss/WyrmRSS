@@ -101,3 +101,36 @@ impl LocalInstance {
 pub struct LocalInstanceUpdateForm {
     pub registration_mode: RegistrationMode,
 }
+
+#[cfg(all(test, feature = "postgres"))]
+mod tests {
+    use super::*;
+    use crate::setup_test_db;
+
+    #[tokio::test]
+    async fn update_round_trips_registration_mode() {
+        let pool = setup_test_db().await;
+        let original = LocalInstance::get(&pool)
+            .await
+            .expect("get should succeed")
+            .registration_mode;
+
+        for mode in [RegistrationMode::Open, RegistrationMode::Closed] {
+            let form = LocalInstanceUpdateForm {
+                registration_mode: mode,
+            };
+            LocalInstance::update(&pool, form)
+                .await
+                .expect("update should succeed");
+            let stored = LocalInstance::get(&pool).await.expect("get should succeed");
+            assert_eq!(stored.registration_mode, mode);
+        }
+
+        let form = LocalInstanceUpdateForm {
+            registration_mode: original,
+        };
+        LocalInstance::update(&pool, form)
+            .await
+            .expect("should restore the original mode");
+    }
+}
