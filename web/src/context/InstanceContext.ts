@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { InstanceStatusResponse } from "../types/InstanceStatusResponse";
+import type { LocalInstanceStatusResponse } from "../types/LocalInstanceStatusResponse";
 
 /** The instance SetupGate loaded. Null when /instance couldn't be reached. */
-export const InstanceContext = createContext<InstanceStatusResponse | null>(null);
+export const InstanceContext = createContext<LocalInstanceStatusResponse | null>(null);

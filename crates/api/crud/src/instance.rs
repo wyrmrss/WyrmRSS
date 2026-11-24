@@ -1,9 +1,8 @@
 use actix_web::{
-    HttpRequest,
-    HttpResponse,
+    HttpRequest, HttpResponse,
     web::{Data, Json},
 };
-use api_utils::{context::WyrmContext, responses::instance::InstanceConfigResponse};
+use api_utils::{context::WyrmContext, responses::instance::LocalInstanceConfigResponse};
 use database::models::instance::{LocalInstance, LocalInstanceUpdateForm, RegistrationMode};
 use serde::Deserialize;
 use wyrm_auth::{
@@ -30,7 +29,7 @@ pub struct InstanceSetup {
 
 #[derive(Deserialize, ts_rs::TS)]
 #[ts(export)]
-pub struct UpdateInstance {
+pub struct UpdateLocalInstance {
     /// Who can create an account.
     registration_mode: RegistrationMode,
 }
@@ -38,9 +37,9 @@ pub struct UpdateInstance {
 /// Updates instance-level configuration. Admins only.
 pub async fn update(
     user: AuthenticatedUser,
-    Json(data): Json<UpdateInstance>,
+    Json(data): Json<UpdateLocalInstance>,
     ctx: Data<WyrmContext>,
-) -> WyrmResult<Json<InstanceConfigResponse>> {
+) -> WyrmResult<Json<LocalInstanceConfigResponse>> {
     ctx.deny_in_demo()?;
 
     user.require_admin()?;

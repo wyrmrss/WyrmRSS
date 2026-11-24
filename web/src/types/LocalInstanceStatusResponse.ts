@@ -2,6 +2,6 @@
 import type { RegistrationMode } from "./RegistrationMode";
 
 /**
- * Instance-wide settings that admins change.
+ * What the setup and sign-in screens need, readable without signing in.
  */
-export type InstanceConfigResponse = { registration_mode: RegistrationMode, };
+export type LocalInstanceStatusResponse = { is_setup: boolean, registration_mode: RegistrationMode, };
