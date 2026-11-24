@@ -1,5 +1,5 @@
 import { type SubmitEvent, useContext, useState } from "react";
-import { login, register } from "../../api/auth";
+import { login, register, startOidcLink } from "../../api/auth";
 import { InstanceContext } from "../../context/InstanceContext";
 import { useNewPassword } from "../../hooks/useNewPassword";
 import { useTheme } from "../../hooks/useTheme";
@@ -25,8 +25,7 @@ export function SignInScreen({ methods, callbackError }: SignInScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(callbackError);
 
-  async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function submit(linkOidc: boolean) {
     setSubmitting(true);
     setError(null);
     try {
@@ -34,8 +33,9 @@ export function SignInScreen({ methods, callbackError }: SignInScreenProps) {
         ? await register({ username, password: newPassword.password })
         : await login({ username, password });
       if (response.ok) {
-        // Reload to start the app with the new session.
-        window.location.reload();
+        // Signed in now: reload to start the app with the new session, or continue to OIDC.
+        if (linkOidc) startOidcLink(returnTo);
+        else window.location.reload();
         return;
       }
       await throwApiError(response);
@@ -43,6 +43,11 @@ export function SignInScreen({ methods, callbackError }: SignInScreenProps) {
       setError(e instanceof ApiError ? e.message : "Unable to reach the server. Please try again.");
     }
     setSubmitting(false);
+  }
+
+  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    void submit(false);
   }
 
   function switchMode() {
@@ -100,6 +105,16 @@ export function SignInScreen({ methods, callbackError }: SignInScreenProps) {
                 ? submitting ? "Signing up…" : "Sign up"
                 : submitting ? "Signing in…" : "Sign in"}
             </button>
+            {oidcEnabled && signingUp && (
+              <button
+                type="button"
+                className="btn"
+                disabled={submitting || !ready}
+                onClick={() => void submit(true)}
+              >
+                Sign up and link OIDC
+              </button>
+            )}
           </>
         )}
         {oidcEnabled && !signingUp && (

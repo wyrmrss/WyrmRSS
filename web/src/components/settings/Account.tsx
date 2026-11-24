@@ -1,9 +1,9 @@
 import { type SubmitEvent, useContext, useState } from "react";
+import { startOidcLink } from "../../api/auth";
 import { AuthContext } from "../../context/AuthContext";
 import { useAccount, useDeleteAccount, useUpdatePassword } from "../../hooks/useAccount";
 import { useNewPassword } from "../../hooks/useNewPassword";
 import type { AccountResponse } from "../../types/AccountResponse";
-import { ENDPOINTS } from "../../utils/api";
 import { AUTH } from "../../utils/constants";
 
 function errorMessage(error: unknown): string {
@@ -90,8 +90,8 @@ function DeleteAccountForm({ account }: { account: AccountResponse }) {
     e.preventDefault();
     if (confirmation === "" || isPending) return;
     const body = account.has_password ? { password: confirmation } : { username: confirmation };
-    // Reload to land on the sign-in screen, the response already cleared the session cookie.
-    mutate(body, { onSuccess: () => window.location.reload() });
+    // Go home to land on the sign-in screen, the response already cleared the session cookie.
+    mutate(body, { onSuccess: () => window.location.assign("/") });
   }
 
   return (
@@ -124,7 +124,6 @@ function DeleteAccountForm({ account }: { account: AccountResponse }) {
 
 function OidcLink({ linked }: { linked: boolean }) {
   const { linkError } = useContext(AuthContext);
-  const params = new URLSearchParams({ link: "true", return_to: "/settings?tab=account" });
 
   return (
     <div className="settings-section account-form">
@@ -138,7 +137,7 @@ function OidcLink({ linked }: { linked: boolean }) {
         <button
           type="button"
           className="btn"
-          onClick={() => window.location.assign(`${ENDPOINTS.auth.oidcLogin()}?${params}`)}
+          onClick={() => startOidcLink("/settings?tab=account")}
         >
           {linked ? "Link a different identity" : "Link OIDC"}
         </button>

@@ -11,6 +11,13 @@ export const login = (body: LoginRequest): Promise<Response> =>
     body: JSON.stringify(body),
   });
 
+/** Sends the browser to the identity provider to link it to the signed-in account. */
+export function startOidcLink(returnTo?: string) {
+  const params = new URLSearchParams({ link: "true" });
+  if (returnTo) params.set("return_to", returnTo);
+  window.location.assign(`${ENDPOINTS.auth.oidcLogin()}?${params}`);
+}
+
 /** Creates an account and signs in. Returns the raw response for the sign-up form to check. */
 export const register = (body: RegisterAccount): Promise<Response> =>
   fetchWithAuth(ENDPOINTS.auth.register(), {

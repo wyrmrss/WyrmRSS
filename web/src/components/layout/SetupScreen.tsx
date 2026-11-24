@@ -1,8 +1,8 @@
 import { type SubmitEvent, useEffect, useState } from "react";
 import { useNewPassword } from "../../hooks/useNewPassword";
 import { useTheme } from "../../hooks/useTheme";
+import { startOidcLink } from "../../api/auth";
 import { setupInstance } from "../../api/instance";
-import { ENDPOINTS } from "../../utils/api";
 import { fetchAuthStatus } from "../../utils/auth";
 import { AUTH } from "../../utils/constants";
 import { NewPasswordFields } from "./NewPasswordFields";
@@ -30,7 +30,7 @@ export function SetupScreen() {
     try {
       await setupInstance({ token, username, password: newPassword.password });
       // Signed in now: reload so SetupGate sees the finished setup, or continue to OIDC.
-      if (linkOidc) window.location.assign(`${ENDPOINTS.auth.oidcLogin()}?link=true`);
+      if (linkOidc) startOidcLink();
       else window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Setup failed.");
