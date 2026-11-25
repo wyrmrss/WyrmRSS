@@ -13,11 +13,15 @@ use database::{
         post::{Post, PostInsertForm},
         webhook::Webhook,
     },
+    newtypes::UserId,
     utils::runtime_settings::RuntimeSettings,
     views,
 };
 use futures::future::join_all;
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 use tokio::sync::{Semaphore, mpsc::Receiver};
 use tracing::{debug, error, info, warn};
 use wyrm_utils::{
@@ -92,16 +96,20 @@ impl FeedWorker {
 
         info!("Processing {} due feeds", due_feeds.len());
 
-        // TODO(#372): every user's credentials share one client, matched by host;
-        // a feed must only use its owner's credentials.
-        let host_credentials = HostCredential::get_all(&self.db_pool).await?;
-
-        // Build the http client from in-memory runtime settings
-        // as settings may have been updated.
-        let http = HttpClient::new(
-            &HttpConfig::from(&*self.runtime_settings.read()?),
-            host_credentials,
-        )?;
+        // Each feed is fetched by a client that holds only its owner's credentials.
+        let mut creds_by_user: HashMap<UserId, Vec<HostCredential>> = HashMap::new();
+        for credential in HostCredential::get_all(&self.db_pool).await? {
+            creds_by_user
+                .entry(credential.user_id)
+                .or_default()
+                .push(credential);
+        }
+        // Built from in-memory runtime settings, as settings may have been updated.
+        let http_base = HttpClient::new(&HttpConfig::from(&*self.runtime_settings.read()?))?;
+        let clients: HashMap<UserId, HttpClient> = creds_by_user
+            .into_iter()
+            .map(|(user_id, creds)| (user_id, http_base.with_credentials(creds)))
+            .collect();
 
         let feed_webhooks = views::webhook::all_by_feed(&self.db_pool).await?;
         let feed_folders = views::folder::all_by_feed(&self.db_pool).await?;
@@ -114,7 +122,7 @@ impl FeedWorker {
         let tasks: Vec<_> = due_feeds
             .into_iter()
             .map(|feed| {
-                let http = http.clone();
+                let http = clients.get(&feed.user_id).unwrap_or(&http_base).clone();
                 let pool = self.db_pool.clone();
                 let webhooks = feed_webhooks.get(&feed.id).cloned().unwrap_or_default();
                 let folder = feed_folders.get(&feed.id).map(|f| f.name.clone());

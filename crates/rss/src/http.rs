@@ -10,7 +10,7 @@ use http::{Extensions, HeaderName, HeaderValue};
 use reqwest::{Request, Response, StatusCode, Url, header};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware, Next, Result};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::{debug, info, warn};
 use wyrm_utils::{
     error::{HttpClientError, WyrmError},
@@ -89,11 +89,12 @@ pub struct Fetched {
 #[derive(Clone)]
 pub struct HttpClient {
     inner: ClientWithMiddleware,
-    host_credentials: HashMap<String, HostCredential>,
+    /// One user's credentials by `host:port`, empty on the base client.
+    host_credentials: Arc<HashMap<String, HostCredential>>,
 }
 
 impl HttpClient {
-    pub fn new(config: &HttpConfig, credentials: Vec<HostCredential>) -> WyrmResult<HttpClient> {
+    pub fn new(config: &HttpConfig) -> WyrmResult<HttpClient> {
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(config.retries);
 
         let user_agent = config.user_agent.as_deref().unwrap_or(concat!(
@@ -117,15 +118,24 @@ impl HttpClient {
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
         .build();
 
-        let host_credentials: HashMap<String, HostCredential> = credentials
-            .into_iter()
-            .map(|auth| (auth.host.clone(), auth))
-            .collect();
-
         Ok(HttpClient {
             inner: client,
-            host_credentials,
+            host_credentials: Arc::default(),
         })
+    }
+
+    /// Copy of this client that sends only the given credentials,
+    /// sharing its connection pool.
+    pub fn with_credentials(&self, creds: Vec<HostCredential>) -> Self {
+        let host_credentials: HashMap<String, HostCredential> = creds
+            .into_iter()
+            .map(|credential| (credential.host.clone(), credential))
+            .collect();
+
+        Self {
+            inner: self.inner.clone(),
+            host_credentials: Arc::new(host_credentials),
+        }
     }
 
     /// Unconditional fetch, used by feed discovery and icon resolution
@@ -304,6 +314,7 @@ pub fn custom_header(name: &str, value: &str) -> WyrmResult<(HeaderName, HeaderV
 #[cfg(test)]
 mod tests {
     use super::*;
+    use database::newtypes::{HostCredentialId, UserId};
 
     fn host_key_of(url: &str) -> Option<String> {
         host_key(&Url::parse(url).unwrap())
@@ -399,7 +410,7 @@ mod tests {
             retries: 0,
             user_agent: None,
         };
-        let client = HttpClient::new(&config, vec![]).unwrap();
+        let client = HttpClient::new(&config).unwrap();
 
         let fetched = client
             .fetch_conditional(&url, &HttpValidators::default())
@@ -414,5 +425,69 @@ mod tests {
             .await
             .unwrap();
         assert!(revalidated.is_none());
+    }
+
+    /// Local server that answers 200 with the request's `x-api-key` value as the body,
+    /// or `none` when the header is missing.
+    async fn spawn_api_key_echo_server() -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = [0u8; 4096];
+                let read = socket.read(&mut buffer).await.unwrap();
+                let request = String::from_utf8_lossy(&buffer[..read]).to_ascii_lowercase();
+
+                let api_key = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("x-api-key:"))
+                    .map(str::trim)
+                    .unwrap_or("none");
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{api_key}",
+                    api_key.len()
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        format!("http://{address}/feed")
+    }
+
+    fn api_key_credential(user_id: i32, host: String, secret: &str) -> HostCredential {
+        HostCredential {
+            id: HostCredentialId(user_id),
+            user_id: UserId(user_id),
+            host,
+            kind: HostCredentialKind::CustomHeader,
+            name: "x-api-key".into(),
+            secret: secret.into(),
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    #[tokio::test]
+    async fn with_credentials_sends_only_that_users_credential() {
+        let url = spawn_api_key_echo_server().await;
+        let host = host_key_of(&url).unwrap();
+        let config = HttpConfig {
+            timeout: 5,
+            connect_timeout: 5,
+            retries: 0,
+            user_agent: None,
+        };
+        let base = HttpClient::new(&config).unwrap();
+
+        // Both users have a credential for the same host.
+        let alice = base.with_credentials(vec![api_key_credential(1, host.clone(), "alice")]);
+        let bob = base.with_credentials(vec![api_key_credential(2, host, "bob")]);
+
+        assert_eq!(&alice.fetch(&url).await.unwrap().body[..], b"alice");
+        assert_eq!(&bob.fetch(&url).await.unwrap().body[..], b"bob");
+        assert_eq!(&base.fetch(&url).await.unwrap().body[..], b"none");
     }
 }
