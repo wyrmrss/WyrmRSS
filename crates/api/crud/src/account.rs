@@ -58,7 +58,7 @@ pub async fn register(
 ) -> WyrmResult<HttpResponse> {
     ctx.deny_in_demo()?;
 
-    let sessions = auth.sessions()?;
+    let sessions = auth.sessions();
 
     sessions.check_csrf(&req)?;
 
@@ -157,7 +157,7 @@ pub async fn delete(
 ) -> WyrmResult<HttpResponse> {
     ctx.deny_in_demo()?;
 
-    let sessions = auth.sessions()?;
+    let sessions = auth.sessions();
 
     let local_user = LocalUser::get(&ctx.db_pool, user.id).await?;
 

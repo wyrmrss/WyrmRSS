@@ -15,7 +15,7 @@ use wyrm_utils::{
 };
 
 pub async fn start_server() -> WyrmResult<()> {
-    info!("Loading settings");
+    info!("Loading startup config");
     let startup_conf = WyrmStartupConfig::load()?;
 
     let mut auth = Auth::new(&startup_conf)?;

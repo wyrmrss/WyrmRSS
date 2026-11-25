@@ -104,7 +104,7 @@ pub async fn setup(
     auth: Data<Auth>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<HttpResponse> {
-    let sessions = auth.sessions()?;
+    let sessions = auth.sessions();
 
     sessions.check_csrf(&req)?;
 

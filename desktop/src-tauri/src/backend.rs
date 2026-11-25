@@ -81,7 +81,7 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
     let db_path = data_dir.join(DATABASE_FILE);
     info!("Using database at {}", db_path.display());
 
-    let startup_conf = WyrmStartupConfig {
+    let mut startup_conf = WyrmStartupConfig {
         database_connection: db_path.to_string_lossy().into_owned(),
         desktop_key: Some(desktop_key.clone()),
         bind: IpAddr::V4(Ipv4Addr::LOCALHOST),
@@ -121,6 +121,7 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
     info!("Starting up embedded HTTP server");
     let listener = TcpListener::bind((startup_conf.bind, 0))?;
     let port = listener.local_addr()?.port();
+    startup_conf.public_url = format!("http://127.0.0.1:{port}");
 
     // api_routes wraps its protected routes in wyrm_auth's middleware, which needs `Auth`.
     let auth = web::Data::new(Auth::new(&startup_conf)?);

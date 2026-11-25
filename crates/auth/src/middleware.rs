@@ -31,7 +31,7 @@ pub async fn middleware(
         return next.call(req).await;
     }
 
-    let sessions = auth.sessions()?;
+    let sessions = auth.sessions();
 
     let Some(authenticated) = sessions.authenticate(&ctx.db_pool, req.request()).await? else {
         return Err(ErrorUnauthorized("Authentication required"));

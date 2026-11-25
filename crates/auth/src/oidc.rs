@@ -77,11 +77,9 @@ impl Oidc {
         let enabled = config.oidc_issuer_url.is_some();
 
         if enabled {
-            let public_url = config
-                .public_url()?
-                .ok_or_else(|| invalid_config("public url required"))?;
+            let public_url = config.public_url()?;
 
-            validate_url(public_url.as_ref())?;
+            validate_url(public_url.as_str())?;
 
             let issuer_url = config
                 .oidc_issuer_url
@@ -371,7 +369,7 @@ mod tests {
 
     fn config() -> WyrmStartupConfig {
         WyrmStartupConfig {
-            public_url: Some("https://rss.example.com".into()),
+            public_url: "https://rss.example.com".into(),
             oidc_issuer_url: Some("https://sso.example.com/realms/wyrm".into()),
             oidc_client_id: Some("wyrm".into()),
             ..Default::default()
@@ -416,11 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn requires_public_url_and_client_id() {
-        assert!(is_invalid_config(Oidc::new(&WyrmStartupConfig {
-            public_url: None,
-            ..config()
-        })));
+    fn requires_client_id() {
         assert!(is_invalid_config(Oidc::new(&WyrmStartupConfig {
             oidc_client_id: None,
             ..config()
@@ -435,7 +429,7 @@ mod tests {
         })));
         assert!(
             Oidc::new(&WyrmStartupConfig {
-                public_url: Some("http://localhost:5173".into()),
+                public_url: "http://localhost:5173".into(),
                 oidc_issuer_url: Some("http://localhost:8080/default".into()),
                 ..config()
             })

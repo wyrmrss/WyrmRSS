@@ -59,6 +59,7 @@ jobs:
         run: cargo test --verbose
         env:
           WYRM_DATABASE_CONNECTION: postgres://wyrm:wyrm@localhost:5432/wyrm
+          WYRM_PUBLIC_URL: http://localhost:3001
 
   build-frontend:
     runs-on: ubuntu-latest

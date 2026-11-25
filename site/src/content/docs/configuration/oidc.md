@@ -25,6 +25,8 @@ subject identifiers (`sub` claims).
 2. Register the callback URL `{public_url}/api/v1/auth/oidc/callback`, where
    `public_url` is the HTTPS origin you reach Wyrm on, such as
    `https://rss.example.com/api/v1/auth/oidc/callback`. Wyrm requests the `openid` scope.
+   With OIDC, `public_url` and the issuer URL must use HTTPS. Plain HTTP only
+   works with `localhost`, `127.0.0.1` or `[::1]`, for local development.
 3. Configure the backend using environment variables or these equivalent keys in
    `config/wyrm.toml`:
 

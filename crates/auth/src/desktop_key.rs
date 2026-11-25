@@ -21,6 +21,7 @@ mod tests {
     fn auth_with_desktop_key(desktop_key: Option<&str>) -> Auth {
         Auth::new(&WyrmStartupConfig {
             desktop_key: desktop_key.map(String::from),
+            public_url: "http://127.0.0.1:3001".into(),
             ..Default::default()
         })
         .expect("valid config")

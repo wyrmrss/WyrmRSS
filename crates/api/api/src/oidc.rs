@@ -113,7 +113,7 @@ async fn sign_in(
         link,
     } = auth.oidc()?.complete_login(req, &state, &code).await?;
 
-    let sessions = auth.sessions()?;
+    let sessions = auth.sessions();
 
     if link {
         // Keeps the current session, so the user stays signed in.

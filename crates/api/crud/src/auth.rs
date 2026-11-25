@@ -29,7 +29,7 @@ pub async fn login(
     ctx: Data<WyrmContext>,
     auth: Data<Auth>,
 ) -> WyrmResult<HttpResponse> {
-    let sessions = auth.sessions()?;
+    let sessions = auth.sessions();
 
     sessions.check_csrf(&req)?;
 
@@ -67,7 +67,7 @@ pub async fn logout(
     ctx: Data<WyrmContext>,
     auth: Data<Auth>,
 ) -> WyrmResult<HttpResponse> {
-    let sessions = auth.sessions()?;
+    let sessions = auth.sessions();
 
     sessions.check_csrf(&req)?;
 

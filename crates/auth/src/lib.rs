@@ -32,15 +32,13 @@ pub struct Auth {
     desktop_key: Option<String>,
     #[cfg(feature = "oidc")]
     oidc: Option<Oidc>,
-    sessions: Option<SessionManager>,
+    sessions: SessionManager,
     setup_token: Option<String>,
 }
 
 impl Auth {
     pub fn new(config: &WyrmStartupConfig) -> WyrmResult<Self> {
-        let sessions = config
-            .public_url()?
-            .map(|url| SessionManager::from_public_url(&url));
+        let sessions = SessionManager::from_public_url(&config.public_url()?);
 
         Ok(Self {
             desktop_key: config.desktop_key.clone(),
@@ -56,9 +54,7 @@ impl Auth {
         if self.oidc_enabled() {
             methods.push(AuthMethod::Oidc);
         }
-        if self.sessions.is_some() {
-            methods.push(AuthMethod::Password);
-        }
+        methods.push(AuthMethod::Password);
         methods
     }
 
@@ -79,10 +75,8 @@ impl Auth {
             .ok_or_else(|| AuthError::AuthMethodDisabled("oidc".into()).into())
     }
 
-    pub fn sessions(&self) -> WyrmResult<&SessionManager> {
-        self.sessions
-            .as_ref()
-            .ok_or_else(|| AuthError::InvalidAuthConfig("public_url is required".into()).into())
+    pub fn sessions(&self) -> &SessionManager {
+        &self.sessions
     }
 
     pub fn setup_token(&self) -> Option<&str> {
@@ -119,10 +113,7 @@ impl Auth {
         if self.desktop_key_valid(req) {
             return Ok(true);
         }
-        match self.sessions().ok() {
-            Some(sessions) => Ok(sessions.authenticate(pool, req).await?.is_some()),
-            None => Ok(false),
-        }
+        Ok(self.sessions.authenticate(pool, req).await?.is_some())
     }
 }
 
@@ -131,16 +122,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn no_public_url_lists_no_password_and_has_no_sessions() {
-        let auth = Auth::new(&WyrmStartupConfig::default()).expect("valid config");
-        assert!(auth.methods().is_empty());
-        assert!(auth.sessions().is_err());
+    fn empty_public_url_is_an_error() {
+        assert!(Auth::new(&WyrmStartupConfig::default()).is_err());
     }
 
     #[cfg(feature = "oidc")]
     fn oidc_config() -> WyrmStartupConfig {
         WyrmStartupConfig {
-            public_url: Some("https://rss.example.com".into()),
+            public_url: "https://rss.example.com".into(),
             oidc_issuer_url: Some("https://sso.example.com/realms/wyrm".into()),
             oidc_client_id: Some("wyrm".into()),
             ..Default::default()
