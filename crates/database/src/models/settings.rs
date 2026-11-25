@@ -67,6 +67,16 @@ impl Settings {
             .map_err(WyrmError::from)
     }
 
+    /// Every user's settings. Unscoped, for background jobs only.
+    pub async fn get_all(pool: &DatabasePool) -> WyrmResult<Vec<Self>> {
+        let mut conn = pool.get().await?;
+        settings::table
+            .select(Settings::as_select())
+            .load(&mut conn)
+            .await
+            .map_err(WyrmError::from)
+    }
+
     pub async fn update(pool: &DatabasePool, form: SettingsUpdateForm) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
         diesel::update(Self::owned(form.user_id))

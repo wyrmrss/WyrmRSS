@@ -6823,7 +6823,6 @@ dependencies = [
  "serde",
  "sha2 0.11.1",
  "tokio",
- "tracing",
  "ts-rs",
  "url",
  "wyrm_utils",

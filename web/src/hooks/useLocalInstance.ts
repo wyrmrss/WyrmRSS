@@ -11,6 +11,8 @@ export function useLocalInstance() {
     queryFn: getLocalInstance,
     // SetupGate waits on this, so an unreachable server shows the app at once instead of after retries.
     retry: false,
+    // Once failed, mounting another reader doesn't refetch, or SetupGate would unmount the app and loop.
+    retryOnMount: false,
   });
 }
 

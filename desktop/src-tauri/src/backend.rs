@@ -14,7 +14,10 @@ use std::{
 };
 use tracing::info;
 use wyrm_auth::Auth;
-use wyrm_rss::worker::{FeedWorker, WorkerCommand};
+use wyrm_rss::{
+    scheduled_tasks,
+    worker::{FeedWorker, WorkerCommand},
+};
 use wyrm_utils::{
     config::WyrmStartupConfig,
     error::{DatabaseError, HttpServerError},
@@ -107,6 +110,8 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
         worker_tx: tx,
         run_as_demo: false,
     });
+
+    scheduled_tasks::spawn(db_pool.clone());
 
     tokio::spawn(async move {
         let mut rss_worker = FeedWorker::new(db_pool, runtime_settings);
