@@ -50,7 +50,7 @@ pub async fn create(
 ) -> WyrmResult<Json<Feed>> {
     ctx.deny_in_demo()?;
 
-    let http = ctx.http().await?;
+    let http = ctx.http(user.id).await?;
     let url_resolver = ctx.url_resolver()?;
 
     let url = url_resolver.normalize(&data.url)?;
@@ -88,7 +88,7 @@ pub async fn update(
 ) -> WyrmResult<Json<Feed>> {
     ctx.deny_in_demo()?;
 
-    let http = ctx.http().await?;
+    let http = ctx.http(user.id).await?;
     let url_resolver = ctx.url_resolver()?;
 
     let id = path.into_inner();
