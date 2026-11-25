@@ -5,7 +5,7 @@ use crate::{
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use api_utils::context::WyrmContext;
-use database::{models::settings::Settings, utils::settings::RuntimeSettings};
+use database::{models::instance::LocalInstance, utils::runtime_settings::RuntimeSettings};
 use rand::{RngExt, distr::Alphanumeric};
 use std::{
     net::{IpAddr, Ipv4Addr, TcpListener},
@@ -95,8 +95,8 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
     info!("Creating database pool");
     let db_pool = database::create_pool(&startup_conf).await?;
 
-    let settings = Settings::get(&db_pool).await?;
-    let rs = RuntimeSettings::from(&settings);
+    let local_instance = LocalInstance::get(&db_pool).await?;
+    let rs = RuntimeSettings::from(&local_instance);
 
     let runtime_settings = Arc::new(RwLock::new(rs));
     let (tx, rx) = tokio::sync::mpsc::channel::<WorkerCommand>(1);

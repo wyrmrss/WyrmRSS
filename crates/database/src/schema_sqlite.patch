@@ -69,10 +69,10 @@
          is_setup -> Bool,
 -        registration_mode -> Text,
 +        registration_mode -> RegistrationModeMapping,
-     }
- }
- 
-@@ -78,7 +87,7 @@
+         feed_poll_interval_secs -> Integer,
+         http_timeout_secs -> Integer,
+         http_connect_timeout_secs -> Integer,
+@@ -84,7 +93,7 @@
          password_hash -> Nullable<Text>,
          oidc_subject -> Nullable<Text>,
          is_admin -> Bool,
@@ -81,7 +81,7 @@
      }
  }
  
-@@ -88,10 +97,10 @@
+@@ -94,10 +103,10 @@
          title -> Nullable<Text>,
          url -> Nullable<Text>,
          authors -> Nullable<Text>,
@@ -94,7 +94,7 @@
          user_id -> Integer,
      }
  }
-@@ -103,14 +112,14 @@
+@@ -109,14 +118,14 @@
          title -> Nullable<Text>,
          url -> Nullable<Text>,
          authors -> Nullable<Text>,
@@ -112,7 +112,7 @@
          thumbnail_url -> Nullable<Text>,
      }
  }
-@@ -118,13 +127,16 @@
+@@ -124,17 +133,20 @@
  diesel::table! {
      sessions (token_hash) {
          token_hash -> Text,
@@ -128,13 +128,9 @@
 +    use diesel::sql_types::*;
 +    use crate::models::settings::ReadModeMapping;
 +
-     settings (is_singleton) {
-         is_singleton -> Bool,
+     settings (user_id) {
+         user_id -> Integer,
          page_size -> Integer,
-@@ -133,7 +145,7 @@
-         http_connect_timeout -> Integer,
-         http_retries -> Integer,
-         http_user_agent -> Nullable<Text>,
 -        read_mode -> Text,
 +        read_mode -> ReadModeMapping,
          expire_read_after_days -> Nullable<Integer>,

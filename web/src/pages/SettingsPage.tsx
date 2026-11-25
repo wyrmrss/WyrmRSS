@@ -39,8 +39,8 @@ export function SettingsPage() {
   // Desktop is signed in through its key and has no account to manage.
   const showAccount = signedIn && !isTauri();
   const { data: account } = useAccount();
-  // Desktop is single-user, so registration doesn't apply there.
-  const showAdmin = showAccount && account?.is_admin === true;
+  // Desktop acts as user 1, an admin, so it gets the tab too.
+  const showAdmin = account?.is_admin === true;
 
   return (
     <div className="settings-page">

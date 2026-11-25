@@ -1,25 +1,21 @@
-use actix_web::web::{Data, Json};
-use api_utils::{
-    context::WyrmContext,
-    responses::instance::{LocalInstanceConfigResponse, LocalInstanceStatusResponse},
-};
+use actix_web::{HttpRequest, HttpResponse, http::header, web::Data};
+use api_utils::{context::WyrmContext, responses::instance::LocalInstanceResponse};
 use database::models::instance::LocalInstance;
-use wyrm_auth::authenticated_user::AuthenticatedUser;
+use wyrm_auth::Auth;
 use wyrm_utils::result::WyrmResult;
 
-/// Public, so the frontend can read the setup and sign-in configuration.
-pub async fn status(ctx: Data<WyrmContext>) -> WyrmResult<Json<LocalInstanceStatusResponse>> {
-    let instance = LocalInstance::get(&ctx.db_pool).await?;
-    Ok(Json(instance.into()))
-}
-
-/// Admin-only. Returns the instance-wide configuration.
+/// Public, so setup and sign-in can read it. Some fields are hidden until
+/// signed in, see [`LocalInstanceResponse`].
 pub async fn get(
-    user: AuthenticatedUser,
+    req: HttpRequest,
     ctx: Data<WyrmContext>,
-) -> WyrmResult<Json<LocalInstanceConfigResponse>> {
-    user.require_admin()?;
-
+    auth: Data<Auth>,
+) -> WyrmResult<HttpResponse> {
+    let signed_in = auth.is_signed_in(&ctx.db_pool, &req).await?;
     let instance = LocalInstance::get(&ctx.db_pool).await?;
-    Ok(Json(instance.into()))
+
+    // The body depends on the session, so it must not be cached.
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(LocalInstanceResponse::new(instance, signed_in)))
 }

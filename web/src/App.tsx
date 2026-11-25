@@ -25,9 +25,9 @@ const qc = new QueryClient({
 export default function App() {
   return (
     <ThemeProvider>
-      <SetupGate>
-        <AuthGate>
-          <QueryClientProvider client={qc}>
+      <QueryClientProvider client={qc}>
+        <SetupGate>
+          <AuthGate>
             <BrowserRouter>
               <Routes>
                 <Route element={<AppLayout />}>
@@ -50,9 +50,9 @@ export default function App() {
                 </Route>
               </Routes>
             </BrowserRouter>
-          </QueryClientProvider>
-        </AuthGate>
-      </SetupGate>
+          </AuthGate>
+        </SetupGate>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

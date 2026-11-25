@@ -1,6 +1,6 @@
 //! Feed URL handling: the form to store and the URL to fetch, per runtime settings.
 use crate::rsshub;
-use database::utils::settings::RuntimeSettings;
+use database::utils::runtime_settings::RuntimeSettings;
 use reqwest::Url;
 use wyrm_utils::{error::WyrmError, result::WyrmResult};
 

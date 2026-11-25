@@ -1,2 +1,2 @@
 pub mod pagination;
-pub mod settings;
+pub mod runtime_settings;

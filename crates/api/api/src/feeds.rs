@@ -68,7 +68,7 @@ pub async fn poll(ctx: Data<WyrmContext>) -> WyrmResult<HttpResponse> {
     }
 
     // Wait for the configured http timeout.
-    let http_timeout = ctx.runtime_settings.read()?.http_timeout;
+    let http_timeout = ctx.runtime_settings.read()?.http_timeout_secs;
     match tokio::time::timeout(Duration::from_secs(http_timeout as u64), rx).await {
         Ok(_) => Ok(HttpResponse::Ok().finish()),
         Err(_) => Ok(HttpResponse::GatewayTimeout().finish()),

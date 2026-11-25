@@ -3,14 +3,14 @@ import { createFeed, deleteFeed, getFeedIcon, getFeeds, pollFeeds, updateFeed } 
 import { evictFeedIconIfUrlChanged, feedIconKey, feedKeys, setFeedPauseState } from "../cache/feeds";
 import { postKeys } from "../cache/posts";
 import { folderKeys } from "./useFolders";
-import { useSettings } from "./useSettings";
+import { useLocalInstance } from "./useLocalInstance";
 import type { CreateFeed } from "../types/CreateFeed";
 import type { UpdateFeed } from "../types/UpdateFeed";
 import type { FeedId } from "../types/FeedId";
 import type { FeedMeta } from "../components/posts/PostItem";
 
 export function useFeeds() {
-  const pollIntervalSecs = useSettings().data?.feed_poll_interval_secs;
+  const pollIntervalSecs = useLocalInstance().data?.feed_poll_interval_secs;
   return useQuery({
     queryKey: feedKeys.all,
     queryFn: getFeeds,

@@ -4,7 +4,7 @@ use database::{
         feed::Feed,
         host_credential::{HostCredential, HostCredentialKind},
     },
-    utils::settings::RuntimeSettings,
+    utils::runtime_settings::RuntimeSettings,
 };
 use http::{Extensions, HeaderName, HeaderValue};
 use reqwest::{Request, Response, StatusCode, Url, header};
@@ -53,8 +53,8 @@ pub struct HttpConfig {
 impl From<&RuntimeSettings> for HttpConfig {
     fn from(s: &RuntimeSettings) -> Self {
         HttpConfig {
-            timeout: s.http_timeout as u64,
-            connect_timeout: s.http_connect_timeout as u64,
+            timeout: s.http_timeout_secs as u64,
+            connect_timeout: s.http_connect_timeout_secs as u64,
             retries: s.http_retries as u32,
             user_agent: s.http_user_agent.clone(),
         }
