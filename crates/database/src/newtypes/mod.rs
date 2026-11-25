@@ -94,6 +94,11 @@ impl FromSql<FiltersSql, Sqlite> for Filters {
 
 macro_rules! id_newtype {
     ($name:ident, $doc:literal) => {
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
         #[derive(
             DieselNewType, Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, TS,
         )]

@@ -1,7 +1,7 @@
 use database::{
     DatabasePool,
     models::host_credential::HostCredential,
-    utils::settings::RuntimeSettings,
+    utils::runtime_settings::RuntimeSettings,
 };
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::Sender;

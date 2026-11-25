@@ -1,7 +1,7 @@
 use actix_web::web::{Data, Json, Path, Query};
 use api_utils::context::WyrmContext;
 use database::{
-    models::archive::PostArchive,
+    models::{archive::PostArchive, settings::Settings},
     newtypes::PostId,
     utils::pagination::PagedResponse,
     views::archive::{ListPostArchive, PostArchiveQuery},
@@ -25,7 +25,9 @@ pub async fn list(
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<PagedResponse<Vec<PostArchive>>>> {
     let query = query.into_inner();
-    let page_size = ctx.runtime_settings.read()?.page_size;
+
+    let page_size = Settings::get(&ctx.db_pool, user.id).await?.page_size;
+
     let page = PostArchiveQuery {
         cursor: query.page,
         search: query.search,

@@ -14,6 +14,7 @@ pub mod username;
 use crate::oidc::Oidc;
 use crate::session::SessionManager;
 use actix_web::HttpRequest;
+use database::DatabasePool;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use wyrm_utils::{config::WyrmStartupConfig, error::AuthError, result::WyrmResult};
@@ -110,6 +111,18 @@ impl Auth {
     /// True when the request carries the desktop app's key.
     pub fn desktop_key_valid(&self, req: &HttpRequest) -> bool {
         desktop_key::valid(req, self)
+    }
+
+    /// True when the request carries the desktop key or an active session.
+    /// For public routes, which the auth middleware doesn't run on.
+    pub async fn is_signed_in(&self, pool: &DatabasePool, req: &HttpRequest) -> WyrmResult<bool> {
+        if self.desktop_key_valid(req) {
+            return Ok(true);
+        }
+        match self.sessions().ok() {
+            Some(sessions) => Ok(sessions.authenticate(pool, req).await?.is_some()),
+            None => Ok(false),
+        }
     }
 }
 

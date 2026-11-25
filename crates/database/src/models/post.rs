@@ -315,25 +315,36 @@ impl Post {
         .await
     }
 
-    pub async fn expire_read(pool: &DatabasePool, days: i32) -> WyrmResult<usize> {
-        Self::expire(pool, days, true).await
+    pub async fn expire_read(pool: &DatabasePool, user_id: UserId, days: i32) -> WyrmResult<usize> {
+        Self::expire(pool, user_id, days, true).await
     }
 
-    pub async fn expire_unread(pool: &DatabasePool, days: i32) -> WyrmResult<usize> {
-        Self::expire(pool, days, false).await
+    pub async fn expire_unread(
+        pool: &DatabasePool,
+        user_id: UserId,
+        days: i32,
+    ) -> WyrmResult<usize> {
+        Self::expire(pool, user_id, days, false).await
     }
     /// Deletes read or unread posts older than `days` and tombstones their urls
     /// in `expired_posts` in the same transaction, so a later poll can't
     /// re-insert them while they're still listed in the upstream feed.
-    async fn expire(pool: &DatabasePool, days: i32, is_read: bool) -> WyrmResult<usize> {
+    async fn expire(
+        pool: &DatabasePool,
+        user_id: UserId,
+        days: i32,
+        is_read: bool,
+    ) -> WyrmResult<usize> {
         let mut conn = pool.get().await?;
         let conn = &mut *conn;
 
         let cutoff = Utc::now() - Duration::days(days as i64);
 
         conn.transaction(async |conn| {
+            let user_feeds = Feed::owned(user_id).select(feeds::id);
             let deleted: Vec<(FeedId, Option<String>)> = diesel::delete(
                 posts::table
+                    .filter(posts::feed_id.eq_any(user_feeds))
                     .filter(posts::is_read.eq(is_read))
                     .filter(posts::is_archived.eq(false))
                     .filter(posts::bookmarked.eq(false))
@@ -827,8 +838,8 @@ mod tests {
 
             // Other tests share the database, so rows besides ours may expire:
             // assert on our posts, not exact counts.
-            assert!(Post::expire_read(&pool, 5).await.unwrap() >= 1);
-            assert!(Post::expire_unread(&pool, 5).await.unwrap() >= 1);
+            assert!(Post::expire_read(&pool, feed.user_id, 5).await.unwrap() >= 1);
+            assert!(Post::expire_unread(&pool, feed.user_id, 5).await.unwrap() >= 1);
             assert!(Post::get(&pool, feed.user_id, read_id).await.is_err());
             assert!(Post::get(&pool, feed.user_id, unread_id).await.is_err());
             assert!(Post::get(&pool, feed.user_id, kept_id).await.is_ok());

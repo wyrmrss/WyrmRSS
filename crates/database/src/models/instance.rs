@@ -37,6 +37,19 @@ pub struct LocalInstance {
     pub is_setup: bool,
     /// Who can create an account. Closed by default.
     pub registration_mode: RegistrationMode,
+    /// How often feeds are polled for new posts, in seconds.
+    pub feed_poll_interval_secs: i32,
+    /// Total timeout for a feed HTTP request, in seconds.
+    pub http_timeout_secs: i32,
+    /// Timeout for establishing the connection to a feed host, in seconds.
+    pub http_connect_timeout_secs: i32,
+    /// Number of times a failed feed request is retried.
+    pub http_retries: i32,
+    /// Custom `User-Agent` header sent when fetching feeds; `None` uses the
+    /// default.
+    pub http_user_agent: Option<String>,
+    /// RSSHub instance base URL; `None` disables rsshub:// subscriptions.
+    pub rsshub_instance: Option<String>,
 }
 
 impl LocalInstance {
@@ -99,13 +112,32 @@ impl LocalInstance {
 #[derive(AsChangeset)]
 #[diesel(table_name = schema::local_instance)]
 pub struct LocalInstanceUpdateForm {
-    pub registration_mode: RegistrationMode,
+    pub registration_mode: Option<RegistrationMode>,
+    pub feed_poll_interval_secs: Option<i32>,
+    pub http_timeout_secs: Option<i32>,
+    pub http_connect_timeout_secs: Option<i32>,
+    pub http_retries: Option<i32>,
+    pub http_user_agent: Option<Option<String>>,
+    pub rsshub_instance: Option<Option<String>>,
 }
 
 #[cfg(all(test, feature = "postgres"))]
 mod tests {
     use super::*;
     use crate::setup_test_db;
+
+    /// A form that only changes the registration mode.
+    fn registration_mode_form(mode: RegistrationMode) -> LocalInstanceUpdateForm {
+        LocalInstanceUpdateForm {
+            registration_mode: Some(mode),
+            feed_poll_interval_secs: None,
+            http_timeout_secs: None,
+            http_connect_timeout_secs: None,
+            http_retries: None,
+            http_user_agent: None,
+            rsshub_instance: None,
+        }
+    }
 
     #[tokio::test]
     async fn update_round_trips_registration_mode() {
@@ -116,20 +148,14 @@ mod tests {
             .registration_mode;
 
         for mode in [RegistrationMode::Open, RegistrationMode::Closed] {
-            let form = LocalInstanceUpdateForm {
-                registration_mode: mode,
-            };
-            LocalInstance::update(&pool, form)
+            LocalInstance::update(&pool, registration_mode_form(mode))
                 .await
                 .expect("update should succeed");
             let stored = LocalInstance::get(&pool).await.expect("get should succeed");
             assert_eq!(stored.registration_mode, mode);
         }
 
-        let form = LocalInstanceUpdateForm {
-            registration_mode: original,
-        };
-        LocalInstance::update(&pool, form)
+        LocalInstance::update(&pool, registration_mode_form(original))
             .await
             .expect("should restore the original mode");
     }

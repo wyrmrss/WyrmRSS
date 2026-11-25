@@ -1,4 +1,4 @@
-use crate::{DatabasePool, schema::settings};
+use crate::{DatabaseConn, DatabasePool, newtypes::UserId, schema::settings};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use diesel_derive_enum::DbEnum;
@@ -35,24 +35,11 @@ pub enum ReadMode {
 #[derive(ts_rs::TS)]
 #[ts(optional_fields, export)]
 pub struct Settings {
-    /// Always `true`. This column is the primary key, and the `only_one_row`
-    /// CHECK pins it to `true` — so the table can hold at most one row.
-    #[ts(skip)]
     #[serde(skip)]
-    pub is_singleton: bool,
+    #[ts(skip)]
+    pub user_id: UserId,
     /// Number of posts returned per page when listing.
     pub page_size: i32,
-    /// How often feeds are polled for new posts, in seconds.
-    pub feed_poll_interval_secs: i32,
-    /// Total timeout for a feed HTTP request, in seconds.
-    pub http_timeout: i32,
-    /// Timeout for establishing the connection to a feed host, in seconds.
-    pub http_connect_timeout: i32,
-    /// Number of times a failed feed request is retried.
-    pub http_retries: i32,
-    /// Custom `User-Agent` header sent when fetching feeds; `None` uses the
-    /// default.
-    pub http_user_agent: Option<String>,
     /// When posts get marked as read (see [`ReadMode`]).
     pub read_mode: ReadMode,
     /// Delete read posts after N days.
@@ -63,27 +50,50 @@ pub struct Settings {
     pub expire_unread_after_days: Option<i32>,
     /// Delay before marking post as read.
     pub read_delay_secs: i32,
-    /// RSSHub instance base URL; `None` disables rsshub:// subscriptions.
-    pub rsshub_instance: Option<String>,
 }
 
 impl Settings {
-    pub async fn get(pool: &DatabasePool) -> WyrmResult<Self> {
+    #[diesel::dsl::auto_type(no_type_alias)]
+    pub(crate) fn owned(user_id: UserId) -> _ {
+        settings::table.filter(settings::user_id.eq(user_id))
+    }
+
+    pub async fn get(pool: &DatabasePool, user_id: UserId) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
-        settings::table
+        Self::owned(user_id)
             .select(Settings::as_select())
             .first(&mut conn)
             .await
             .map_err(WyrmError::from)
     }
 
-    pub async fn update(pool: &DatabasePool, form: SettingsUpdateForm) -> WyrmResult<Self> {
+    /// Every user's settings. Unscoped, for background jobs only.
+    pub async fn get_all(pool: &DatabasePool) -> WyrmResult<Vec<Self>> {
         let mut conn = pool.get().await?;
-        diesel::update(settings::table)
-            .set(form)
-            .get_result::<Self>(&mut conn)
+        settings::table
+            .select(Settings::as_select())
+            .load(&mut conn)
             .await
             .map_err(WyrmError::from)
+    }
+
+    pub async fn update(pool: &DatabasePool, form: SettingsUpdateForm) -> WyrmResult<Self> {
+        let mut conn = pool.get().await?;
+        diesel::update(Self::owned(form.user_id))
+            .set(form)
+            .returning(Settings::as_returning())
+            .get_result(&mut conn)
+            .await
+            .map_err(WyrmError::from)
+    }
+
+    /// Gives a new user a settings row with the column defaults.
+    pub async fn create_default(conn: &mut DatabaseConn, user_id: UserId) -> WyrmResult<()> {
+        diesel::insert_into(settings::table)
+            .values(settings::user_id.eq(user_id))
+            .execute(conn)
+            .await?;
+        Ok(())
     }
 }
 
@@ -91,18 +101,13 @@ impl Settings {
 #[diesel(table_name = crate::schema::settings)]
 #[diesel(check_for_backend(crate::Backend))]
 pub struct SettingsUpdateForm {
+    #[diesel(skip_update)]
+    pub user_id: UserId,
     pub page_size: Option<i32>,
-    pub feed_poll_interval_secs: Option<i32>,
-    pub http_timeout: Option<i32>,
-    pub http_connect_timeout: Option<i32>,
-    pub http_retries: Option<i32>,
-    // Outer None preserves a nullable setting; Some(None) explicitly clears it.
-    pub http_user_agent: Option<Option<String>>,
     pub read_mode: Option<ReadMode>,
     pub expire_read_after_days: Option<Option<i32>>,
     pub expire_unread_after_days: Option<Option<i32>>,
     pub read_delay_secs: Option<i32>,
-    pub rsshub_instance: Option<Option<String>>,
 }
 
 #[cfg(all(test, feature = "postgres"))]
@@ -110,51 +115,41 @@ mod tests {
     use super::*;
     use crate::setup_test_db;
 
-    /// Settings is a shared singleton, so this snapshots the row, applies an
-    /// update, restores the original, and only then asserts — a failed
-    /// assertion can't leave the dev database dirty.
+    /// Snapshots the row, applies updates, restores the original and only then
+    /// asserts, so a failed assertion can't leave the dev database dirty.
     #[tokio::test]
     async fn update_changes_only_given_fields() {
         let pool = setup_test_db().await;
 
-        let original = Settings::get(&pool).await.expect("should read settings");
-        assert!(original.is_singleton);
+        let original = Settings::get(&pool, UserId(1))
+            .await
+            .expect("should read settings");
 
-        // Change a couple of fields; leave the rest as `None`.
+        // Change a few fields, leave the rest as `None`.
         let updated = Settings::update(
             &pool,
             SettingsUpdateForm {
+                user_id: UserId(1),
                 page_size: Some(original.page_size + 1),
-                feed_poll_interval_secs: None,
-                http_timeout: None,
-                http_connect_timeout: None,
-                http_retries: None,
-                http_user_agent: Some(Some("wyrm-test/1.0".to_string())),
                 read_mode: Some(ReadMode::Disabled),
-                expire_read_after_days: None,
+                expire_read_after_days: Some(Some(30)),
                 expire_unread_after_days: None,
                 read_delay_secs: None,
-                rsshub_instance: None,
             },
         )
         .await
         .expect("update should succeed");
 
-        // An explicit inner `None` clears the nullable user agent.
+        // An explicit inner `None` clears the nullable expiry.
         let cleared = Settings::update(
             &pool,
             SettingsUpdateForm {
+                user_id: UserId(1),
                 page_size: None,
-                feed_poll_interval_secs: None,
-                http_timeout: None,
-                http_connect_timeout: None,
-                http_retries: None,
-                http_user_agent: Some(None),
                 read_mode: None,
-                expire_read_after_days: None,
+                expire_read_after_days: Some(None),
                 expire_unread_after_days: None,
                 read_delay_secs: None,
-                rsshub_instance: None,
             },
         )
         .await
@@ -164,17 +159,12 @@ mod tests {
         Settings::update(
             &pool,
             SettingsUpdateForm {
+                user_id: UserId(1),
                 page_size: Some(original.page_size),
-                feed_poll_interval_secs: Some(original.feed_poll_interval_secs),
-                http_timeout: Some(original.http_timeout),
-                http_connect_timeout: Some(original.http_connect_timeout),
-                http_retries: Some(original.http_retries),
-                http_user_agent: Some(original.http_user_agent.clone()),
                 read_mode: Some(original.read_mode.clone()),
-                expire_read_after_days: None,
+                expire_read_after_days: Some(original.expire_read_after_days),
                 expire_unread_after_days: None,
                 read_delay_secs: None,
-                rsshub_instance: None,
             },
         )
         .await
@@ -182,15 +172,12 @@ mod tests {
 
         // Given fields changed...
         assert_eq!(updated.page_size, original.page_size + 1);
-        assert_eq!(updated.http_user_agent.as_deref(), Some("wyrm-test/1.0"));
         assert!(matches!(updated.read_mode, ReadMode::Disabled));
+        assert_eq!(updated.expire_read_after_days, Some(30));
         // ...while `None` fields were left untouched.
-        assert_eq!(
-            updated.feed_poll_interval_secs,
-            original.feed_poll_interval_secs
-        );
+        assert_eq!(updated.read_delay_secs, original.read_delay_secs);
         // An explicit inner `None` writes NULL...
-        assert_eq!(cleared.http_user_agent, None);
+        assert_eq!(cleared.expire_read_after_days, None);
         // ...but a plain `None` field is still left untouched.
         assert_eq!(cleared.page_size, original.page_size + 1);
     }

@@ -331,62 +331,91 @@ async fn deleting_a_feed_cascades_to_posts() {
 #[tokio::test]
 async fn rsshub_instance_persists_and_partial_updates_preserve_it() {
     use database::{
-        models::settings::{Settings, SettingsUpdateForm},
-        utils::settings::RuntimeSettings,
+        models::instance::{LocalInstance, LocalInstanceUpdateForm},
+        utils::runtime_settings::RuntimeSettings,
     };
 
-    fn form(instance: Option<Option<&str>>) -> SettingsUpdateForm {
-        SettingsUpdateForm {
-            page_size: None,
+    fn form(instance: Option<Option<&str>>) -> LocalInstanceUpdateForm {
+        LocalInstanceUpdateForm {
+            registration_mode: None,
             feed_poll_interval_secs: None,
-            http_timeout: None,
-            http_connect_timeout: None,
+            http_timeout_secs: None,
+            http_connect_timeout_secs: None,
             http_retries: None,
             http_user_agent: None,
-            read_mode: None,
-            expire_read_after_days: None,
-            expire_unread_after_days: None,
-            read_delay_secs: None,
             rsshub_instance: instance.map(|value| value.map(String::from)),
         }
     }
 
     let db = TestDb::new("rsshub").await;
-    assert_eq!(Settings::get(&db.pool).await.unwrap().rsshub_instance, None);
+    assert_eq!(
+        LocalInstance::get(&db.pool).await.unwrap().rsshub_instance,
+        None
+    );
     let mut seeded = form(None);
     seeded.http_user_agent = Some(Some("custom-agent".into()));
-    seeded.expire_read_after_days = Some(Some(30));
-    seeded.expire_unread_after_days = Some(Some(90));
-    Settings::update(&db.pool, seeded).await.unwrap();
-    Settings::update(&db.pool, form(Some(Some("https://example.com/rsshub"))))
+    LocalInstance::update(&db.pool, seeded).await.unwrap();
+    LocalInstance::update(&db.pool, form(Some(Some("https://example.com/rsshub"))))
         .await
         .unwrap();
-    let saved = Settings::get(&db.pool).await.unwrap();
+    let saved = LocalInstance::get(&db.pool).await.unwrap();
     assert_eq!(
         saved.rsshub_instance.as_deref(),
         Some("https://example.com/rsshub")
     );
     assert_eq!(saved.http_user_agent.as_deref(), Some("custom-agent"));
-    assert_eq!(saved.expire_read_after_days, Some(30));
-    assert_eq!(saved.expire_unread_after_days, Some(90));
     assert_eq!(
         RuntimeSettings::from(&saved).rsshub_instance,
         saved.rsshub_instance
     );
     let mut unrelated = form(None);
+    unrelated.http_retries = Some(saved.http_retries + 1);
+    let unchanged = LocalInstance::update(&db.pool, unrelated).await.unwrap();
+    assert_eq!(unchanged.rsshub_instance, saved.rsshub_instance);
+    let cleared = LocalInstance::update(&db.pool, form(Some(None)))
+        .await
+        .unwrap();
+    assert_eq!(cleared.rsshub_instance, None);
+    let mut clear_user_agent = form(None);
+    clear_user_agent.http_user_agent = Some(None);
+    let cleared = LocalInstance::update(&db.pool, clear_user_agent)
+        .await
+        .unwrap();
+    assert_eq!(cleared.http_user_agent, None);
+}
+
+#[tokio::test]
+async fn settings_expiry_can_be_set_and_cleared() {
+    use database::models::settings::{Settings, SettingsUpdateForm};
+
+    fn form(days: Option<Option<i32>>) -> SettingsUpdateForm {
+        SettingsUpdateForm {
+            user_id: UserId(1),
+            page_size: None,
+            read_mode: None,
+            expire_read_after_days: days,
+            expire_unread_after_days: days,
+            read_delay_secs: None,
+        }
+    }
+
+    let db = TestDb::new("settings_expiry").await;
+    let saved = Settings::update(&db.pool, form(Some(Some(30))))
+        .await
+        .unwrap();
+    assert_eq!(saved.expire_read_after_days, Some(30));
+    assert_eq!(saved.expire_unread_after_days, Some(30));
+    let mut unrelated = form(None);
     unrelated.page_size = Some(saved.page_size + 1);
     let unchanged = Settings::update(&db.pool, unrelated).await.unwrap();
-    assert_eq!(unchanged.rsshub_instance, saved.rsshub_instance);
+    assert_eq!(unchanged.expire_read_after_days, Some(30));
     let cleared = Settings::update(&db.pool, form(Some(None))).await.unwrap();
-    assert_eq!(cleared.rsshub_instance, None);
-    let mut clear_nullable = form(None);
-    clear_nullable.http_user_agent = Some(None);
-    clear_nullable.expire_read_after_days = Some(None);
-    clear_nullable.expire_unread_after_days = Some(None);
-    let cleared = Settings::update(&db.pool, clear_nullable).await.unwrap();
-    assert_eq!(cleared.http_user_agent, None);
     assert_eq!(cleared.expire_read_after_days, None);
     assert_eq!(cleared.expire_unread_after_days, None);
+    assert_eq!(
+        Settings::get(&db.pool, UserId(1)).await.unwrap().page_size,
+        saved.page_size + 1
+    );
 }
 
 #[tokio::test]

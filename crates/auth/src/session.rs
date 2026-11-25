@@ -62,11 +62,6 @@ impl SessionManager {
         let now = Utc::now();
         let expires_at = now + SESSION_IDLE_TIMEOUT;
 
-        // Housekeeping only: expired sessions can't authenticate, so a failure mustn't block login.
-        if let Err(error) = Session::delete_expired(pool).await {
-            tracing::warn!(%error, "could not delete expired sessions");
-        }
-
         Session::create(
             pool,
             SessionInsertForm {

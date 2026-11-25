@@ -4,6 +4,7 @@ import { pollFeeds } from "../api/feeds";
 import { feedKeys } from "../cache/feeds";
 import { postKeys } from "../cache/posts";
 import { folderKeys } from "./useFolders";
+import { useLocalInstance } from "./useLocalInstance";
 import type { UpdateSettings } from "../types/UpdateSettings";
 
 export function useSettings() {
@@ -21,8 +22,8 @@ export function useDemoMode() {
 
 /** Name of the integration this feed depends on while it's off (the worker skips it), else null. */
 export function useIntegrationPaused(url: string): string | null {
-  const settings = useSettings().data;
-  if (url.startsWith("rsshub://") && !settings?.rsshub_instance) return "RSSHub";
+  const instance = useLocalInstance().data;
+  if (url.startsWith("rsshub://") && !instance?.rsshub_instance) return "RSSHub";
   return null;
 }
 

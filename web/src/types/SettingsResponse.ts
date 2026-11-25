@@ -7,27 +7,6 @@ export type SettingsResponse = { run_as_demo: boolean,
  */
 page_size: number, 
 /**
- * How often feeds are polled for new posts, in seconds.
- */
-feed_poll_interval_secs: number, 
-/**
- * Total timeout for a feed HTTP request, in seconds.
- */
-http_timeout: number, 
-/**
- * Timeout for establishing the connection to a feed host, in seconds.
- */
-http_connect_timeout: number, 
-/**
- * Number of times a failed feed request is retried.
- */
-http_retries: number, 
-/**
- * Custom `User-Agent` header sent when fetching feeds; `None` uses the
- * default.
- */
-http_user_agent?: string, 
-/**
  * When posts get marked as read (see [`ReadMode`]).
  */
 read_mode: ReadMode, 
@@ -44,8 +23,4 @@ expire_unread_after_days?: number,
 /**
  * Delay before marking post as read.
  */
-read_delay_secs: number, 
-/**
- * RSSHub instance base URL; `None` disables rsshub:// subscriptions.
- */
-rsshub_instance?: string, };
+read_delay_secs: number, };

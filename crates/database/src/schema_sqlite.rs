@@ -77,6 +77,12 @@ diesel::table! {
         is_singleton -> Bool,
         is_setup -> Bool,
         registration_mode -> RegistrationModeMapping,
+        feed_poll_interval_secs -> Integer,
+        http_timeout_secs -> Integer,
+        http_connect_timeout_secs -> Integer,
+        http_retries -> Integer,
+        http_user_agent -> Nullable<Text>,
+        rsshub_instance -> Nullable<Text>,
     }
 }
 
@@ -137,19 +143,13 @@ diesel::table! {
     use diesel::sql_types::*;
     use crate::models::settings::ReadModeMapping;
 
-    settings (is_singleton) {
-        is_singleton -> Bool,
+    settings (user_id) {
+        user_id -> Integer,
         page_size -> Integer,
-        feed_poll_interval_secs -> Integer,
-        http_timeout -> Integer,
-        http_connect_timeout -> Integer,
-        http_retries -> Integer,
-        http_user_agent -> Nullable<Text>,
         read_mode -> ReadModeMapping,
         expire_read_after_days -> Nullable<Integer>,
         expire_unread_after_days -> Nullable<Integer>,
         read_delay_secs -> Integer,
-        rsshub_instance -> Nullable<Text>,
     }
 }
 

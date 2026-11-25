@@ -38,7 +38,7 @@ export const ENDPOINTS = {
     logout: () => `${apiBase()}/auth/logout`,
   },
   instance: {
-    status: () => `${apiBase()}/instance/status`,
+    get: () => `${apiBase()}/instance`,
     setup: () => `${apiBase()}/instance/setup`,
   },
   feeds: {

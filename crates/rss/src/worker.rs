@@ -13,7 +13,7 @@ use database::{
         post::{Post, PostInsertForm},
         webhook::Webhook,
     },
-    utils::settings::RuntimeSettings,
+    utils::runtime_settings::RuntimeSettings,
     views,
 };
 use futures::future::join_all;
@@ -81,8 +81,6 @@ impl FeedWorker {
 
     /// Queries the database for feeds due for polling and fetches new posts.
     async fn poll_feeds(&mut self) -> WyrmResult<()> {
-        self.expire_posts().await?;
-
         let feeds = Feed::get_all(&self.db_pool).await?;
 
         let resolver = FeedUrlResolver::from(&*self.runtime_settings.read()?);
@@ -136,34 +134,6 @@ impl FeedWorker {
 
         join_all(tasks).await;
 
-        Ok(())
-    }
-
-    /// Deletes read/unread posts older than the configured thresholds.
-    /// Bookmarked posts are never deleted. Failures are logged rather
-    /// than propagated so expiry can never block feed polling.
-    async fn expire_posts(&self) -> WyrmResult<()> {
-        let (expire_read_after_days, expire_unread_after_days) = {
-            let settings = self.runtime_settings.read()?;
-            (
-                settings.expire_read_after_days,
-                settings.expire_unread_after_days,
-            )
-        };
-        if let Some(days) = expire_read_after_days {
-            match Post::expire_read(&self.db_pool, days).await {
-                Ok(0) => {}
-                Ok(n) => info!("Expired {n} read posts"),
-                Err(e) => error!("failed to expire read posts: {e}"),
-            }
-        }
-        if let Some(days) = expire_unread_after_days {
-            match Post::expire_unread(&self.db_pool, days).await {
-                Ok(0) => {}
-                Ok(n) => info!("Expired {n} unread posts"),
-                Err(e) => error!("failed to expire unread posts: {e}"),
-            }
-        }
         Ok(())
     }
 }

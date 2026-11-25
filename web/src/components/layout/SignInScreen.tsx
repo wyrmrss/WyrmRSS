@@ -1,6 +1,6 @@
-import { type SubmitEvent, useContext, useState } from "react";
+import { type SubmitEvent, useState } from "react";
 import { login, register, startOidcLink } from "../../api/auth";
-import { InstanceContext } from "../../context/InstanceContext";
+import { useLocalInstance } from "../../hooks/useLocalInstance";
 import { useNewPassword } from "../../hooks/useNewPassword";
 import { useTheme } from "../../hooks/useTheme";
 import { ENDPOINTS } from "../../utils/api";
@@ -17,7 +17,7 @@ interface SignInScreenProps {
 
 export function SignInScreen({ methods, callbackError }: SignInScreenProps) {
   const { theme } = useTheme();
-  const instance = useContext(InstanceContext);
+  const { data: instance } = useLocalInstance();
   const [signingUp, setSigningUp] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

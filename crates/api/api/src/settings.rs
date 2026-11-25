@@ -26,8 +26,11 @@ use wyrm_utils::{
     result::WyrmResult,
 };
 
-pub async fn get(ctx: Data<WyrmContext>) -> WyrmResult<Json<SettingsResponse>> {
-    let settings = Settings::get(&ctx.db_pool).await?;
+pub async fn get(
+    user: AuthenticatedUser,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<SettingsResponse>> {
+    let settings = Settings::get(&ctx.db_pool, user.id).await?;
     Ok(Json(SettingsResponse {
         settings,
         run_as_demo: ctx.run_as_demo,
@@ -77,7 +80,7 @@ pub async fn import(
     // http timeout to land so the frontend's refetch right after this
     // response already sees the imported posts and their icons. A huge
     // import may take longer; the frontend polls again as a safety net.
-    let http_timeout = ctx.runtime_settings.read()?.http_timeout;
+    let http_timeout = ctx.runtime_settings.read()?.http_timeout_secs;
     let _ = tokio::time::timeout(Duration::from_secs(http_timeout as u64), rx).await;
 
     Ok(HttpResponse::NoContent().finish())

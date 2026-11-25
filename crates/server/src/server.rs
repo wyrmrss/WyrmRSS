@@ -1,13 +1,13 @@
 use actix_web::{App, HttpServer, dev::ServerHandle, web};
 use api_utils::context::WyrmContext;
-use database::{
-    models::{instance::LocalInstance, settings::Settings},
-    utils::settings::RuntimeSettings,
-};
+use database::{models::instance::LocalInstance, utils::runtime_settings::RuntimeSettings};
 use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 use wyrm_auth::Auth;
-use wyrm_rss::worker::{FeedWorker, WorkerCommand};
+use wyrm_rss::{
+    scheduled_tasks,
+    worker::{FeedWorker, WorkerCommand},
+};
 use wyrm_utils::{
     config::WyrmStartupConfig,
     error::{DatabaseError, HttpServerError},
@@ -42,9 +42,9 @@ pub async fn start_server() -> WyrmResult<()> {
 
     let auth = web::Data::new(auth);
 
-    let settings = Settings::get(&db_pool).await?;
+    let local_instance = LocalInstance::get(&db_pool).await?;
 
-    let rs = RuntimeSettings::from(&settings);
+    let rs = RuntimeSettings::from(&local_instance);
 
     let runtime_settings = Arc::new(RwLock::new(rs));
 
@@ -56,6 +56,8 @@ pub async fn start_server() -> WyrmResult<()> {
         worker_tx: tx,
         run_as_demo: startup_conf.run_as_demo,
     });
+
+    scheduled_tasks::spawn(db_pool.clone());
 
     tokio::spawn(async move {
         let mut rss_worker = FeedWorker::new(db_pool, runtime_settings);

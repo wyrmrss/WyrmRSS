@@ -1,6 +1,7 @@
 use crate::{
     DatabaseConn,
     DatabasePool,
+    models::settings::Settings,
     newtypes::UserId,
     schema::{self, local_users},
 };
@@ -81,14 +82,22 @@ impl LocalUser {
             .map_err(WyrmError::from)
     }
 
+    /// Creates the user and their default settings row in one transaction,
+    /// so a user can't exist without settings.
     pub async fn create(pool: &DatabasePool, form: LocalUserInsertForm) -> WyrmResult<Self> {
-        let mut conn = pool.get().await?;
-        diesel::insert_into(local_users::table)
-            .values(&form)
-            .returning(Self::as_returning())
-            .get_result(&mut conn)
-            .await
-            .map_err(WyrmError::from)
+        let mut pool = pool.get().await?;
+        let conn = &mut *pool;
+
+        conn.transaction(async |conn| {
+            let user = diesel::insert_into(local_users::table)
+                .values(&form)
+                .returning(Self::as_returning())
+                .get_result(conn)
+                .await?;
+            Settings::create_default(conn, user.id).await?;
+            Ok(user)
+        })
+        .await
     }
 
     /// Deletes the user and, by cascade, everything they own.

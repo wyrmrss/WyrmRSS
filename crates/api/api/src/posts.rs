@@ -7,6 +7,7 @@ use database::{
     models::{
         archive::PostArchive,
         post::{MarkReadTarget, Post},
+        settings::Settings,
     },
     newtypes::{FeedId, FolderId, PostId},
     utils::pagination::{PagedResponse, PaginationCursor},
@@ -73,7 +74,7 @@ pub async fn list(
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<PagedResponse<Vec<Post>>>> {
     let query = query.into_inner();
-    let page_size = ctx.runtime_settings.read()?.page_size;
+    let page_size = Settings::get(&ctx.db_pool, user.id).await?.page_size;
     let page = PostQuery {
         cursor: query.page,
         feed_id: query.feed_id,

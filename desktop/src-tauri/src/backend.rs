@@ -5,7 +5,7 @@ use crate::{
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use api_utils::context::WyrmContext;
-use database::{models::settings::Settings, utils::settings::RuntimeSettings};
+use database::{models::instance::LocalInstance, utils::runtime_settings::RuntimeSettings};
 use rand::{RngExt, distr::Alphanumeric};
 use std::{
     net::{IpAddr, Ipv4Addr, TcpListener},
@@ -14,7 +14,10 @@ use std::{
 };
 use tracing::info;
 use wyrm_auth::Auth;
-use wyrm_rss::worker::{FeedWorker, WorkerCommand};
+use wyrm_rss::{
+    scheduled_tasks,
+    worker::{FeedWorker, WorkerCommand},
+};
 use wyrm_utils::{
     config::WyrmStartupConfig,
     error::{DatabaseError, HttpServerError},
@@ -95,8 +98,8 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
     info!("Creating database pool");
     let db_pool = database::create_pool(&startup_conf).await?;
 
-    let settings = Settings::get(&db_pool).await?;
-    let rs = RuntimeSettings::from(&settings);
+    let local_instance = LocalInstance::get(&db_pool).await?;
+    let rs = RuntimeSettings::from(&local_instance);
 
     let runtime_settings = Arc::new(RwLock::new(rs));
     let (tx, rx) = tokio::sync::mpsc::channel::<WorkerCommand>(1);
@@ -107,6 +110,8 @@ pub async fn bootstrap(data_dir: PathBuf) -> WyrmDesktopResult<ServerInfo> {
         worker_tx: tx,
         run_as_demo: false,
     });
+
+    scheduled_tasks::spawn(db_pool.clone());
 
     tokio::spawn(async move {
         let mut rss_worker = FeedWorker::new(db_pool, runtime_settings);
