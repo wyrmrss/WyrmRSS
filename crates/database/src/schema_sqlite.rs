@@ -83,6 +83,7 @@ diesel::table! {
         http_retries -> Integer,
         http_user_agent -> Nullable<Text>,
         rsshub_instance -> Nullable<Text>,
+        manual_poll_interval_secs -> Integer,
     }
 }
 
@@ -94,6 +95,7 @@ diesel::table! {
         oidc_subject -> Nullable<Text>,
         is_admin -> Bool,
         created_at -> TimestamptzSqlite,
+        last_manual_poll_at -> Nullable<TimestamptzSqlite>,
     }
 }
 

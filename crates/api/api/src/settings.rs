@@ -74,7 +74,13 @@ pub async fn import(
     }
 
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let _ = ctx.worker_tx.try_send(WorkerCommand::PollFeeds(tx));
+    let _ = ctx
+        .worker_tx
+        .send(WorkerCommand::PollUserFeeds {
+            reply: tx,
+            user_id: user.id,
+        })
+        .await;
 
     // The import is complete and a poll is on the way: give it up to one
     // http timeout to land so the frontend's refetch right after this

@@ -339,6 +339,7 @@ async fn rsshub_instance_persists_and_partial_updates_preserve_it() {
         LocalInstanceUpdateForm {
             registration_mode: None,
             feed_poll_interval_secs: None,
+            manual_poll_interval_secs: None,
             http_timeout_secs: None,
             http_connect_timeout_secs: None,
             http_retries: None,

@@ -37,7 +37,7 @@ pub enum DisplayMode {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Clone, Serialize, Queryable, Selectable)]
+#[derive(Debug, Clone, Serialize, Queryable, Selectable)]
 #[diesel(table_name = crate::schema::feeds)]
 #[diesel(check_for_backend(crate::Backend))]
 #[derive(ts_rs::TS)]

@@ -11,6 +11,8 @@ pub struct LocalInstanceResponse {
     pub registration_mode: RegistrationMode,
     /// How often feeds are polled for new posts, in seconds.
     pub feed_poll_interval_secs: i32,
+    /// Minimum time between a user's manual refreshes, in seconds.
+    pub manual_poll_interval_secs: i32,
     /// Total timeout for a feed HTTP request, in seconds.
     pub http_timeout_secs: i32,
     /// Timeout for connecting to a feed host, in seconds.
@@ -29,6 +31,7 @@ impl LocalInstanceResponse {
             is_setup: instance.is_setup,
             registration_mode: instance.registration_mode,
             feed_poll_interval_secs: instance.feed_poll_interval_secs,
+            manual_poll_interval_secs: instance.manual_poll_interval_secs,
             http_timeout_secs: instance.http_timeout_secs,
             http_connect_timeout_secs: instance.http_connect_timeout_secs,
             http_retries: instance.http_retries,

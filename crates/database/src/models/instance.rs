@@ -50,6 +50,8 @@ pub struct LocalInstance {
     pub http_user_agent: Option<String>,
     /// RSSHub instance base URL; `None` disables rsshub:// subscriptions.
     pub rsshub_instance: Option<String>,
+    /// Minimum time between a user's manual refreshes, in seconds.
+    pub manual_poll_interval_secs: i32,
 }
 
 impl LocalInstance {
@@ -114,6 +116,7 @@ impl LocalInstance {
 pub struct LocalInstanceUpdateForm {
     pub registration_mode: Option<RegistrationMode>,
     pub feed_poll_interval_secs: Option<i32>,
+    pub manual_poll_interval_secs: Option<i32>,
     pub http_timeout_secs: Option<i32>,
     pub http_connect_timeout_secs: Option<i32>,
     pub http_retries: Option<i32>,
@@ -131,6 +134,7 @@ mod tests {
         LocalInstanceUpdateForm {
             registration_mode: Some(mode),
             feed_poll_interval_secs: None,
+            manual_poll_interval_secs: None,
             http_timeout_secs: None,
             http_connect_timeout_secs: None,
             http_retries: None,

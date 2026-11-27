@@ -11,6 +11,7 @@ rust-version.workspace = true
 actix-web = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }
+tokio = { workspace = true }
 ts-rs = { workspace = true }
 api_utils = { path = "../utils", default-features = false }
 wyrm_utils = { path = "../../utils" }

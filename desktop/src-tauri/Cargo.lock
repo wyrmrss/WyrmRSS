@@ -287,6 +287,7 @@ version = "0.39.1"
 dependencies = [
  "actix-web",
  "api_utils",
+ "chrono",
  "database",
  "serde",
  "tokio",
@@ -306,6 +307,7 @@ dependencies = [
  "database",
  "serde",
  "serde_with",
+ "tokio",
  "ts-rs",
  "wyrm-rss",
  "wyrm_auth",
@@ -328,6 +330,7 @@ name = "api_utils"
 version = "0.39.1"
 dependencies = [
  "actix-web",
+ "chrono",
  "database",
  "serde",
  "tokio",
