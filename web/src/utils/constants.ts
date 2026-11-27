@@ -31,15 +31,17 @@ export const STORAGE_KEYS = {
   hideCaughtUp: "wyrm:hide-caught-up",
   demoInstallHintDismissed: "wyrm:demo-install-hint-dismissed",
   readerWidth: "wyrm:reader-width",
-  apiKey: "WYRM_API_KEY",
 };
 
 export const AUTH = {
-  apiKeyHeader: "x-api-key",
+  desktopKeyHeader: "x-wyrm-desktop-key",
   csrfHeader: "x-wyrm-csrf",
   csrfValue: "1",
   unauthorizedEvent: "wyrm:unauthorized",
   errorParam: "auth_error",
+  // Mirror the limits the server enforces in crates/auth/src/password.rs and username.rs.
+  minPasswordLength: 8,
+  usernameLength: { min: 3, max: 32 },
 } as const;
 
 export const LAYOUT = {

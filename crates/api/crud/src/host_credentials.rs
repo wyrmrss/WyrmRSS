@@ -10,6 +10,7 @@ use database::{
     newtypes::HostCredentialId,
 };
 use serde::Deserialize;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_rss::http::{custom_header, parse_host_key};
 use wyrm_utils::{error::WyrmError, result::WyrmResult};
 
@@ -32,6 +33,7 @@ pub struct UpdateHostCredential {
 }
 
 pub async fn create(
+    user: AuthenticatedUser,
     Json(data): Json<CreateHostCredential>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<HostCredential>> {
@@ -56,6 +58,7 @@ pub async fn create(
     let host_credential = HostCredential::create(
         &ctx.db_pool,
         HostCredentialInsertForm {
+            user_id: user.id,
             host: parsed_host,
             kind: data.kind,
             name: data.name,
@@ -68,6 +71,7 @@ pub async fn create(
 }
 
 pub async fn update(
+    user: AuthenticatedUser,
     path: Path<HostCredentialId>,
     Json(data): Json<UpdateHostCredential>,
     ctx: Data<WyrmContext>,
@@ -78,7 +82,7 @@ pub async fn update(
 
     let parsed_host = data.host.as_deref().map(parse_host_key).transpose()?;
 
-    let existing = HostCredential::get(&ctx.db_pool, id).await?;
+    let existing = HostCredential::get(&ctx.db_pool, user.id, id).await?;
 
     let kind = data.kind.as_ref().unwrap_or(&existing.kind);
     let name = data.name.as_deref().unwrap_or(&existing.name);
@@ -94,6 +98,7 @@ pub async fn update(
 
     let form = HostCredentialUpdateForm {
         id,
+        user_id: user.id,
         host: parsed_host,
         kind: data.kind,
         name: data.name,
@@ -111,10 +116,11 @@ pub async fn update(
 }
 
 pub async fn delete(
+    user: AuthenticatedUser,
     path: Path<HostCredentialId>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<HostCredential>> {
     ctx.deny_in_demo()?;
-    let host_credential = HostCredential::delete(&ctx.db_pool, path.into_inner()).await?;
+    let host_credential = HostCredential::delete(&ctx.db_pool, user.id, path.into_inner()).await?;
     Ok(Json(host_credential))
 }

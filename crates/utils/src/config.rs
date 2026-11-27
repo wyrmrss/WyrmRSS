@@ -22,10 +22,10 @@ pub struct WyrmStartupConfig {
     #[default(3001)]
     pub port: u16,
     /// Externally reachable URL of this instance, e.g. `https://rss.example.com`.
-    /// Required when a session-based sign-in method (OIDC) is configured.
-    pub public_url: Option<String>,
-    /// API key
-    pub api_key: Option<String>,
+    pub public_url: String,
+    /// The key set by the desktop build. Used to bypass authentication entirely.
+    #[serde(skip)]
+    pub desktop_key: Option<String>,
     /// OIDC provider's issuer URL, e.g. `https://sso.example.com/realms/wyrm`.
     pub oidc_issuer_url: Option<String>,
     /// Client ID registered for Wyrm at the OIDC provider.
@@ -48,20 +48,25 @@ impl WyrmStartupConfig {
             .add_source(Environment::with_prefix("WYRM"))
             .build()?
             .try_deserialize()?;
-        // Fail fast on a malformed public_url, even if nothing uses it yet.
+        // Fail fast on a missing or malformed public_url.
         config.public_url()?;
         Ok(config)
     }
 
     /// `public_url` parsed and validated: an http(s) origin with nothing after host and port.
-    pub fn public_url(&self) -> WyrmResult<Option<Url>> {
-        let Some(value) = self.public_url.as_deref() else {
-            return Ok(None);
-        };
+    pub fn public_url(&self) -> WyrmResult<Url> {
+        if self.public_url.trim().is_empty() {
+            return Err(WyrmError::StartupConfigError(ConfigError::Message(
+                "public_url is required".into(),
+            )));
+        }
+
         let invalid = |reason: &str| {
             WyrmError::StartupConfigError(ConfigError::Message(format!("public_url {reason}")))
         };
-        let url = Url::parse(value.trim()).map_err(|_| invalid("is not a valid URL"))?;
+
+        let url = Url::parse(self.public_url.trim()).map_err(|_| invalid("is not a valid URL"))?;
+
         if !matches!(url.scheme(), "http" | "https") {
             return Err(invalid("must use http or https"));
         }
@@ -71,6 +76,6 @@ impl WyrmStartupConfig {
         if !url.username().is_empty() || url.password().is_some() {
             return Err(invalid("must not contain credentials"));
         }
-        Ok(Some(url))
+        Ok(url)
     }
 }

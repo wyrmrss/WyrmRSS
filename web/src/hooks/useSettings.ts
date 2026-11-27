@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSettings, importOpml, updateSettings } from "../api/settings";
-import { pollFeeds } from "../api/feeds";
 import { feedKeys } from "../cache/feeds";
 import { postKeys } from "../cache/posts";
 import { folderKeys } from "./useFolders";
+import { useLocalInstance } from "./useLocalInstance";
 import type { UpdateSettings } from "../types/UpdateSettings";
 
 export function useSettings() {
@@ -21,8 +21,8 @@ export function useDemoMode() {
 
 /** Name of the integration this feed depends on while it's off (the worker skips it), else null. */
 export function useIntegrationPaused(url: string): string | null {
-  const settings = useSettings().data;
-  if (url.startsWith("rsshub://") && !settings?.rsshub_instance) return "RSSHub";
+  const instance = useLocalInstance().data;
+  if (url.startsWith("rsshub://") && !instance?.rsshub_instance) return "RSSHub";
   return null;
 }
 
@@ -40,20 +40,13 @@ export function useImportOpml() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (file: File) => importOpml(file),
+    // The server polls the imported feeds and waits up to the HTTP timeout
+    // before replying, so posts usually land with these refetches.
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: feedKeys.all });
+      qc.invalidateQueries({ queryKey: postKeys.all });
       // Import resolves-or-creates folders from OPML categories.
       qc.invalidateQueries({ queryKey: folderKeys.all });
-      // The import response waits (bounded) for the post-import poll, so the
-      // invalidations above usually land with posts and icons already there.
-      // Poll again as a safety net for huge imports that outlast the server's
-      // wait (the worker queue is sequential, and re-polling already-fetched
-      // feeds is a no-op), then pull in the new posts and unread counts.
-      const refresh = () => {
-        qc.invalidateQueries({ queryKey: postKeys.all });
-        qc.invalidateQueries({ queryKey: feedKeys.all });
-      };
-      pollFeeds().then(refresh).catch(refresh);
     }
   });
 }

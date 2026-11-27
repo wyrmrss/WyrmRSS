@@ -4,11 +4,11 @@ use actix_web::{
 };
 use api_utils::{
     context::WyrmContext,
-    response::{SettingsResponse, XmlResponse},
+    responses::{settings::SettingsResponse, xml::XmlResponse},
 };
 use database::{
     models::{
-        feed::{Feed, FeedInsertForm},
+        feed::{DisplayMode, Feed, FeedInsertForm},
         folder::Folder,
         settings::Settings,
     },
@@ -16,6 +16,7 @@ use database::{
 };
 use std::{collections::HashMap, time::Duration};
 use tracing::warn;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_rss::{
     opml::{Opml, Outline},
     worker::WorkerCommand,
@@ -25,8 +26,11 @@ use wyrm_utils::{
     result::WyrmResult,
 };
 
-pub async fn get(ctx: Data<WyrmContext>) -> WyrmResult<Json<SettingsResponse>> {
-    let settings = Settings::get(&ctx.db_pool).await?;
+pub async fn get(
+    user: AuthenticatedUser,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<SettingsResponse>> {
+    let settings = Settings::get(&ctx.db_pool, user.id).await?;
     Ok(Json(SettingsResponse {
         settings,
         run_as_demo: ctx.run_as_demo,
@@ -36,7 +40,11 @@ pub async fn get(ctx: Data<WyrmContext>) -> WyrmResult<Json<SettingsResponse>> {
 /// Imports feeds from a raw OPML request body. Duplicate and invalid URLs are
 /// skipped; all other errors propagate. Triggers a best-effort poll after import
 /// and waits for it (bounded by one http timeout) before responding.
-pub async fn import(body: web::Bytes, ctx: Data<WyrmContext>) -> WyrmResult<HttpResponse> {
+pub async fn import(
+    user: AuthenticatedUser,
+    body: web::Bytes,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<HttpResponse> {
     ctx.deny_in_demo()?;
 
     let opml = Opml::from_xml(body.as_ref())?;
@@ -53,26 +61,32 @@ pub async fn import(body: web::Bytes, ctx: Data<WyrmContext>) -> WyrmResult<Http
         // standalone leaf feed
         if let Some(url) = &outline.xml_url {
             if let Some(url) = normalize_or_skip(url) {
-                create_feed(&ctx, outline.name(), &url, None).await?;
+                create_feed(&user, outline.name(), &url, None, &ctx).await?;
             }
         // folder - children are feeds, each resolves/creates the folder by name
         } else {
             for child in &outline.children {
                 if let Some(url) = child.xml_url.as_deref().and_then(normalize_or_skip) {
-                    create_feed(&ctx, child.name(), &url, Some(outline.name())).await?;
+                    create_feed(&user, child.name(), &url, Some(outline.name()), &ctx).await?;
                 }
             }
         }
     }
 
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let _ = ctx.worker_tx.try_send(WorkerCommand::PollFeeds(tx));
+    let _ = ctx
+        .worker_tx
+        .send(WorkerCommand::PollUserFeeds {
+            reply: tx,
+            user_id: user.id,
+        })
+        .await;
 
     // The import is complete and a poll is on the way: give it up to one
     // http timeout to land so the frontend's refetch right after this
     // response already sees the imported posts and their icons. A huge
     // import may take longer; the frontend polls again as a safety net.
-    let http_timeout = ctx.runtime_settings.read()?.http_timeout;
+    let http_timeout = ctx.runtime_settings.read()?.http_timeout_secs;
     let _ = tokio::time::timeout(Duration::from_secs(http_timeout as u64), rx).await;
 
     Ok(HttpResponse::NoContent().finish())
@@ -80,11 +94,11 @@ pub async fn import(body: web::Bytes, ctx: Data<WyrmContext>) -> WyrmResult<Http
 
 /// Exports all feeds as an OPML file. Feeds in a folder are grouped under a
 /// folder outline; standalone feeds are top-level outlines.
-pub async fn export(ctx: Data<WyrmContext>) -> WyrmResult<XmlResponse> {
+pub async fn export(user: AuthenticatedUser, ctx: Data<WyrmContext>) -> WyrmResult<XmlResponse> {
     let url_resolver = ctx.url_resolver()?;
 
-    let feeds = Feed::get_all(&ctx.db_pool).await?;
-    let folders = Folder::get_all(&ctx.db_pool).await?;
+    let feeds = Feed::get_all_for_user(&ctx.db_pool, user.id).await?;
+    let folders = Folder::get_all(&ctx.db_pool, user.id).await?;
     let folder_names: HashMap<FolderId, String> =
         folders.into_iter().map(|f| (f.id, f.name)).collect();
 
@@ -126,19 +140,22 @@ pub async fn export(ctx: Data<WyrmContext>) -> WyrmResult<XmlResponse> {
 
 /// Creates a feed, skipping it if it already exists.
 async fn create_feed(
-    ctx: &WyrmContext,
+    user: &AuthenticatedUser,
     title: &str,
     url: &str,
     folder: Option<&str>,
+    ctx: &WyrmContext,
 ) -> WyrmResult<()> {
     match Feed::create(
         &ctx.db_pool,
         FeedInsertForm {
+            user_id: user.id,
             title: title.to_string(),
             url: url.to_string(),
             ttl: 60,
             folder: folder.map(String::from),
-            ..Default::default()
+            filters: None,
+            display_mode: DisplayMode::default(),
         },
     )
     .await

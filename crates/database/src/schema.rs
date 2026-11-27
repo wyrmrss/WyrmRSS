@@ -14,6 +14,10 @@ pub mod sql_types {
     pub struct ReadMode;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "registration_mode"))]
+    pub struct RegistrationMode;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "webhook_kind"))]
     pub struct WebhookKind;
 }
@@ -60,6 +64,7 @@ diesel::table! {
         last_error -> Nullable<Text>,
         etag -> Nullable<Text>,
         last_modified -> Nullable<Text>,
+        user_id -> Int4,
     }
 }
 
@@ -67,6 +72,7 @@ diesel::table! {
     folders (id) {
         id -> Int4,
         name -> Text,
+        user_id -> Int4,
     }
 }
 
@@ -81,6 +87,37 @@ diesel::table! {
         name -> Text,
         secret -> Text,
         created_at -> Timestamptz,
+        user_id -> Int4,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::RegistrationMode;
+
+    local_instance (is_singleton) {
+        is_singleton -> Bool,
+        is_setup -> Bool,
+        registration_mode -> RegistrationMode,
+        feed_poll_interval_secs -> Int4,
+        http_timeout_secs -> Int4,
+        http_connect_timeout_secs -> Int4,
+        http_retries -> Int4,
+        http_user_agent -> Nullable<Text>,
+        rsshub_instance -> Nullable<Text>,
+        manual_poll_interval_secs -> Int4,
+    }
+}
+
+diesel::table! {
+    local_users (id) {
+        id -> Int4,
+        username -> Text,
+        password_hash -> Nullable<Text>,
+        oidc_subject -> Nullable<Text>,
+        is_admin -> Bool,
+        created_at -> Timestamptz,
+        last_manual_poll_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -94,6 +131,7 @@ diesel::table! {
         description -> Nullable<Text>,
         content -> Nullable<Text>,
         archived_at -> Timestamptz,
+        user_id -> Int4,
     }
 }
 
@@ -121,6 +159,7 @@ diesel::table! {
         token_hash -> Text,
         expires_at -> Timestamptz,
         last_seen_at -> Timestamptz,
+        user_id -> Int4,
     }
 }
 
@@ -128,26 +167,21 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::ReadMode;
 
-    settings (is_singleton) {
-        is_singleton -> Bool,
+    settings (user_id) {
         page_size -> Int4,
-        feed_poll_interval_secs -> Int4,
-        http_timeout -> Int4,
-        http_connect_timeout -> Int4,
-        http_retries -> Int4,
-        http_user_agent -> Nullable<Text>,
         read_mode -> ReadMode,
         expire_read_after_days -> Nullable<Int4>,
         expire_unread_after_days -> Nullable<Int4>,
         read_delay_secs -> Int4,
-        rsshub_instance -> Nullable<Text>,
+        user_id -> Int4,
     }
 }
 
 diesel::table! {
-    shortcut_overrides (shortcut_action) {
+    shortcut_overrides (user_id, shortcut_action) {
         shortcut_action -> Text,
         key -> Text,
+        user_id -> Int4,
     }
 }
 
@@ -162,6 +196,7 @@ diesel::table! {
         kind -> WebhookKind,
         payload_template -> Nullable<Text>,
         created_at -> Timestamptz,
+        user_id -> Int4,
     }
 }
 
@@ -170,7 +205,15 @@ diesel::joinable!(feed_icons -> feeds (feed_id));
 diesel::joinable!(feed_webhooks -> feeds (feed_id));
 diesel::joinable!(feed_webhooks -> webhooks (webhook_id));
 diesel::joinable!(feeds -> folders (folder_id));
+diesel::joinable!(feeds -> local_users (user_id));
+diesel::joinable!(folders -> local_users (user_id));
+diesel::joinable!(host_credentials -> local_users (user_id));
+diesel::joinable!(post_archive -> local_users (user_id));
 diesel::joinable!(posts -> feeds (feed_id));
+diesel::joinable!(sessions -> local_users (user_id));
+diesel::joinable!(settings -> local_users (user_id));
+diesel::joinable!(shortcut_overrides -> local_users (user_id));
+diesel::joinable!(webhooks -> local_users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     expired_posts,
@@ -179,6 +222,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     feeds,
     folders,
     host_credentials,
+    local_instance,
+    local_users,
     post_archive,
     posts,
     sessions,

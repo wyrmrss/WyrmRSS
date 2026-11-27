@@ -42,6 +42,15 @@ type ProviderClient = CoreClient<
     EndpointMaybeSet, // userinfo
 >;
 
+/// What a finished OIDC login hands back to the callback.
+pub struct CompletedLogin {
+    pub return_to: String,
+    /// The provider's `sub` claim for this user.
+    pub subject: String,
+    /// Started as a link: attach `subject` to the signed-in user.
+    pub link: bool,
+}
+
 /// OIDC sign-in: verifies who the user is at the provider; never creates sessions.
 pub struct Oidc {
     /// Client for discovery and token exchange; never follows redirects.
@@ -68,11 +77,9 @@ impl Oidc {
         let enabled = config.oidc_issuer_url.is_some();
 
         if enabled {
-            let public_url = config
-                .public_url()?
-                .ok_or_else(|| invalid_config("public url required"))?;
+            let public_url = config.public_url()?;
 
-            validate_url(public_url.as_ref())?;
+            validate_url(public_url.as_str())?;
 
             let issuer_url = config
                 .oidc_issuer_url
@@ -122,6 +129,7 @@ impl Oidc {
         Ok(None)
     }
 
+    /// Builds an OIDC client from freshly discovered provider metadata.
     async fn client(&self) -> WyrmResult<ProviderClient> {
         let metadata = self.discover().await?;
 
@@ -139,11 +147,12 @@ impl Oidc {
         )
     }
 
-    /// Builds an OIDC client from freshly discovered provider metadata.
     /// Starts a login: returns the provider URL to redirect to and the sealed login cookie.
+    /// With `link`, the callback links the identity to the signed-in user instead.
     pub async fn begin_login(
         &self,
         return_to: Option<String>,
+        link: bool,
     ) -> WyrmResult<(Url, Cookie<'static>)> {
         let client = self.client().await?;
 
@@ -166,6 +175,7 @@ impl Oidc {
             return_to: return_to
                 .filter(|path| path.len() <= RETURN_PATH_LIMIT && local_path(path))
                 .unwrap_or_else(|| "/".into()),
+            link,
         };
 
         Ok((url, self.seal_login(&pending)))
@@ -204,13 +214,13 @@ impl Oidc {
     }
 
     /// Finishes a login: verifies the callback against the login cookie, returns the return_to
-    /// path.
+    /// path and the user's subject.
     pub async fn complete_login(
         &self,
         req: &HttpRequest,
         state: &str,
         code: &str,
-    ) -> WyrmResult<String> {
+    ) -> WyrmResult<CompletedLogin> {
         let cookie = req
             .cookie(self.login_cookie_name())
             .ok_or_else(|| login_failed("missing login cookie"))?;
@@ -250,7 +260,11 @@ impl Oidc {
             return Err(login_failed(format!("subject {subject} not allowed")));
         }
 
-        Ok(pending.return_to)
+        Ok(CompletedLogin {
+            return_to: pending.return_to,
+            subject: subject.to_owned(),
+            link: pending.link,
+        })
     }
 
     fn open_login(&self, cookie: Cookie<'static>, state: &str) -> Option<PendingLogin> {
@@ -292,6 +306,8 @@ struct PendingLogin {
     verifier: PkceCodeVerifier,
     expires_at: i64,
     return_to: String,
+    /// Link the identity to the signed-in user rather than sign in with it.
+    link: bool,
 }
 
 pub(crate) fn invalid_config(message: impl Display) -> WyrmError {
@@ -323,7 +339,7 @@ fn parse_allowed_subjects(value: &str) -> WyrmResult<Vec<String>> {
 }
 
 fn validate_url(value: &str) -> WyrmResult<reqwest::Url> {
-    let url = reqwest::Url::parse(value).map_err(|_| invalid_config("invalid URL"))?;
+    let url = reqwest::Url::parse(value).map_err(|_| invalid_config("invalid url"))?;
     if (url.scheme() != "https" && !(url.scheme() == "http" && is_loopback(&url)))
         || !url.username().is_empty()
         || url.password().is_some()
@@ -353,7 +369,7 @@ mod tests {
 
     fn config() -> WyrmStartupConfig {
         WyrmStartupConfig {
-            public_url: Some("https://rss.example.com".into()),
+            public_url: "https://rss.example.com".into(),
             oidc_issuer_url: Some("https://sso.example.com/realms/wyrm".into()),
             oidc_client_id: Some("wyrm".into()),
             ..Default::default()
@@ -380,6 +396,7 @@ mod tests {
             verifier: PkceCodeVerifier::new("verifier".into()),
             expires_at,
             return_to: "/feeds".into(),
+            link: false,
         }
     }
 
@@ -397,11 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn requires_public_url_and_client_id() {
-        assert!(is_invalid_config(Oidc::new(&WyrmStartupConfig {
-            public_url: None,
-            ..config()
-        })));
+    fn requires_client_id() {
         assert!(is_invalid_config(Oidc::new(&WyrmStartupConfig {
             oidc_client_id: None,
             ..config()
@@ -416,7 +429,7 @@ mod tests {
         })));
         assert!(
             Oidc::new(&WyrmStartupConfig {
-                public_url: Some("http://localhost:5173".into()),
+                public_url: "http://localhost:5173".into(),
                 oidc_issuer_url: Some("http://localhost:8080/default".into()),
                 ..config()
             })

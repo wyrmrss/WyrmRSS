@@ -94,6 +94,11 @@ impl FromSql<FiltersSql, Sqlite> for Filters {
 
 macro_rules! id_newtype {
     ($name:ident, $doc:literal) => {
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
         #[derive(
             DieselNewType, Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, TS,
         )]
@@ -103,6 +108,7 @@ macro_rules! id_newtype {
     };
 }
 
+id_newtype!(UserId, "The User ID");
 id_newtype!(PostId, "The Post ID");
 id_newtype!(FeedId, "The Feed ID");
 id_newtype!(WebhookId, "The Webhook ID");

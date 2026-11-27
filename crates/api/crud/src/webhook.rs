@@ -4,10 +4,14 @@ use actix_web::{
 };
 use api_utils::context::WyrmContext;
 use database::{
-    models::webhook::{FeedWebhook, Webhook, WebhookInsertForm, WebhookKind, WebhookUpdateForm},
+    models::{
+        feed::Feed,
+        webhook::{FeedWebhook, Webhook, WebhookInsertForm, WebhookKind, WebhookUpdateForm},
+    },
     newtypes::{FeedId, WebhookId},
 };
 use serde::Deserialize;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_utils::{error::WyrmError, result::WyrmResult};
 use wyrm_webhook as webhook;
 
@@ -30,6 +34,7 @@ pub struct UpdateWebhook {
 }
 
 pub async fn create(
+    user: AuthenticatedUser,
     Json(data): Json<CreateWebhook>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<Webhook>> {
@@ -41,6 +46,7 @@ pub async fn create(
     let webhook = Webhook::create(
         &ctx.db_pool,
         WebhookInsertForm {
+            user_id: user.id,
             name: data.name,
             url: data.url,
             kind: data.kind,
@@ -52,6 +58,7 @@ pub async fn create(
 }
 
 pub async fn update(
+    user: AuthenticatedUser,
     path: Path<WebhookId>,
     Json(data): Json<UpdateWebhook>,
     ctx: Data<WyrmContext>,
@@ -69,6 +76,7 @@ pub async fn update(
         &ctx.db_pool,
         WebhookUpdateForm {
             id: path.into_inner(),
+            user_id: user.id,
             name: data.name,
             url: data.url,
             kind: Some(data.kind),
@@ -79,31 +87,46 @@ pub async fn update(
     Ok(Json(webhook))
 }
 
-pub async fn delete(path: Path<WebhookId>, ctx: Data<WyrmContext>) -> WyrmResult<Json<Webhook>> {
+pub async fn delete(
+    user: AuthenticatedUser,
+    path: Path<WebhookId>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<Webhook>> {
     ctx.deny_in_demo()?;
 
-    let webhook = Webhook::delete(&ctx.db_pool, path.into_inner()).await?;
+    let webhook = Webhook::delete(&ctx.db_pool, user.id, path.into_inner()).await?;
     Ok(Json(webhook))
 }
 
 pub async fn attach(
+    user: AuthenticatedUser,
     path: Path<(FeedId, WebhookId)>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<HttpResponse> {
     ctx.deny_in_demo()?;
 
     let (feed_id, webhook_id) = path.into_inner();
+
+    // Both must be the user. 404 otherwise.
+    Feed::get(&ctx.db_pool, user.id, feed_id).await?;
+    Webhook::get(&ctx.db_pool, user.id, webhook_id).await?;
+
     FeedWebhook::create(&ctx.db_pool, feed_id, webhook_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
 pub async fn detach(
+    user: AuthenticatedUser,
     path: Path<(FeedId, WebhookId)>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<HttpResponse> {
     ctx.deny_in_demo()?;
 
     let (feed_id, webhook_id) = path.into_inner();
+
+    // Feed must be owned by the user. 404 otherwise.
+    Feed::get(&ctx.db_pool, user.id, feed_id).await?;
+
     FeedWebhook::delete(&ctx.db_pool, feed_id, webhook_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }

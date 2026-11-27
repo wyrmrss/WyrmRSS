@@ -1,9 +1,12 @@
 use actix_web::{middleware::from_fn, web};
 
+mod account;
+mod admin;
 pub mod auth;
 mod feeds;
 mod folders;
 mod host_credentials;
+mod instance;
 mod posts;
 mod settings;
 mod webhooks;
@@ -13,10 +16,12 @@ pub fn config(cfg: &mut web::ServiceConfig) {
         web::scope("/api/v1")
             // Public routes are single resources: a scope here would claim its whole prefix.
             .configure(auth::public_config)
+            .configure(instance::public_config)
             .service(
                 web::scope("")
                     .wrap(from_fn(wyrm_auth::middleware::middleware))
-                    .configure(auth::config)
+                    .configure(account::config)
+                    .configure(admin::config)
                     .configure(posts::config)
                     .configure(feeds::config)
                     .configure(webhooks::config)

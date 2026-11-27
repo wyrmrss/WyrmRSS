@@ -1,8 +1,11 @@
 use crate::{
     DatabaseConn,
     DatabasePool,
-    models::expired::{ExpiredPost, ExpiredPostInsertForm},
-    newtypes::{FeedId, FolderId, PostId},
+    models::{
+        expired::{ExpiredPost, ExpiredPostInsertForm},
+        feed::Feed,
+    },
+    newtypes::{FeedId, FolderId, PostId, UserId},
     schema::{
         feeds,
         posts::{self},
@@ -71,9 +74,17 @@ pub struct Post {
 }
 
 impl Post {
-    pub async fn get(pool: &DatabasePool, post_id: PostId) -> WyrmResult<Self> {
+    #[diesel::dsl::auto_type(no_type_alias)]
+    pub(crate) fn owned(user_id: UserId) -> _ {
+        let users_feeds = feeds::table
+            .filter(feeds::user_id.eq(user_id))
+            .select(feeds::id);
+        posts::table.filter(posts::feed_id.eq_any(users_feeds))
+    }
+
+    pub async fn get(pool: &DatabasePool, user_id: UserId, post_id: PostId) -> WyrmResult<Self> {
         let mut conn = pool.get().await?;
-        posts::table
+        Self::owned(user_id)
             .find(post_id)
             .select(Post::as_select())
             .first(&mut conn)
@@ -204,18 +215,26 @@ impl Post {
             .map_err(WyrmError::from)
     }
 
-    pub async fn mark_read(pool: &DatabasePool, target: MarkReadTarget) -> WyrmResult<usize> {
+    pub async fn mark_read(
+        pool: &DatabasePool,
+        user_id: UserId,
+        target: MarkReadTarget,
+    ) -> WyrmResult<usize> {
         match target {
-            MarkReadTarget::All => Self::mark_all_as_read(pool).await,
-            MarkReadTarget::Feed(id) => Self::mark_feed_as_read(pool, id).await,
-            MarkReadTarget::Folder(id) => Self::mark_folder_as_read(pool, id).await,
-            MarkReadTarget::Posts(ids) => Self::mark_posts_as_read(pool, ids).await,
+            MarkReadTarget::All => Self::mark_all_as_read(pool, user_id).await,
+            MarkReadTarget::Feed(id) => Self::mark_feed_as_read(pool, user_id, id).await,
+            MarkReadTarget::Folder(id) => Self::mark_folder_as_read(pool, user_id, id).await,
+            MarkReadTarget::Posts(ids) => Self::mark_posts_as_read(pool, user_id, ids).await,
         }
     }
 
-    async fn mark_posts_as_read(pool: &DatabasePool, ids: Vec<PostId>) -> WyrmResult<usize> {
+    async fn mark_posts_as_read(
+        pool: &DatabasePool,
+        user_id: UserId,
+        ids: Vec<PostId>,
+    ) -> WyrmResult<usize> {
         let mut conn = pool.get().await?;
-        diesel::update(posts::table)
+        diesel::update(Self::owned(user_id))
             .filter(posts::id.eq_any(ids))
             .filter(posts::is_read.eq(false))
             .set(posts::is_read.eq(true))
@@ -224,9 +243,9 @@ impl Post {
             .map_err(WyrmError::from)
     }
 
-    async fn mark_all_as_read(pool: &DatabasePool) -> WyrmResult<usize> {
+    async fn mark_all_as_read(pool: &DatabasePool, user_id: UserId) -> WyrmResult<usize> {
         let mut conn = pool.get().await?;
-        diesel::update(posts::table)
+        diesel::update(Self::owned(user_id))
             .filter(posts::is_read.eq(false))
             .set(posts::is_read.eq(true))
             .execute(&mut conn)
@@ -234,9 +253,13 @@ impl Post {
             .map_err(WyrmError::from)
     }
 
-    async fn mark_feed_as_read(pool: &DatabasePool, feed_id: FeedId) -> WyrmResult<usize> {
+    async fn mark_feed_as_read(
+        pool: &DatabasePool,
+        user_id: UserId,
+        feed_id: FeedId,
+    ) -> WyrmResult<usize> {
         let mut conn = pool.get().await?;
-        diesel::update(posts::table)
+        diesel::update(Self::owned(user_id))
             .filter(posts::feed_id.eq(feed_id))
             .filter(posts::is_read.eq(false))
             .set(posts::is_read.eq(true))
@@ -245,9 +268,13 @@ impl Post {
             .map_err(WyrmError::from)
     }
 
-    async fn mark_folder_as_read(pool: &DatabasePool, folder_id: FolderId) -> WyrmResult<usize> {
+    async fn mark_folder_as_read(
+        pool: &DatabasePool,
+        user_id: UserId,
+        folder_id: FolderId,
+    ) -> WyrmResult<usize> {
         let mut conn = pool.get().await?;
-        let folder_feeds = feeds::table
+        let folder_feeds = Feed::owned(user_id)
             .filter(feeds::folder_id.eq(folder_id))
             .select(feeds::id);
         diesel::update(posts::table)
@@ -263,13 +290,14 @@ impl Post {
     /// transaction so the count always reflects this update.
     pub async fn update_with_unread_count(
         pool: &DatabasePool,
+        user_id: UserId,
         form: PostUpdateForm,
     ) -> WyrmResult<(Self, i64)> {
         let mut conn = pool.get().await?;
         let conn = &mut *conn;
 
         conn.transaction(async |conn| {
-            let post: Self = diesel::update(posts::table.find(form.id))
+            let post: Self = diesel::update(Self::owned(user_id).find(form.id))
                 .set(form)
                 .returning(Post::as_select())
                 .get_result(conn)
@@ -287,25 +315,36 @@ impl Post {
         .await
     }
 
-    pub async fn expire_read(pool: &DatabasePool, days: i32) -> WyrmResult<usize> {
-        Self::expire(pool, days, true).await
+    pub async fn expire_read(pool: &DatabasePool, user_id: UserId, days: i32) -> WyrmResult<usize> {
+        Self::expire(pool, user_id, days, true).await
     }
 
-    pub async fn expire_unread(pool: &DatabasePool, days: i32) -> WyrmResult<usize> {
-        Self::expire(pool, days, false).await
+    pub async fn expire_unread(
+        pool: &DatabasePool,
+        user_id: UserId,
+        days: i32,
+    ) -> WyrmResult<usize> {
+        Self::expire(pool, user_id, days, false).await
     }
     /// Deletes read or unread posts older than `days` and tombstones their urls
     /// in `expired_posts` in the same transaction, so a later poll can't
     /// re-insert them while they're still listed in the upstream feed.
-    async fn expire(pool: &DatabasePool, days: i32, is_read: bool) -> WyrmResult<usize> {
+    async fn expire(
+        pool: &DatabasePool,
+        user_id: UserId,
+        days: i32,
+        is_read: bool,
+    ) -> WyrmResult<usize> {
         let mut conn = pool.get().await?;
         let conn = &mut *conn;
 
         let cutoff = Utc::now() - Duration::days(days as i64);
 
         conn.transaction(async |conn| {
+            let user_feeds = Feed::owned(user_id).select(feeds::id);
             let deleted: Vec<(FeedId, Option<String>)> = diesel::delete(
                 posts::table
+                    .filter(posts::feed_id.eq_any(user_feeds))
                     .filter(posts::is_read.eq(is_read))
                     .filter(posts::is_archived.eq(false))
                     .filter(posts::bookmarked.eq(false))
@@ -436,7 +475,8 @@ macro_rules! test_post {
                 .await
                 .expect("post should exist")
         };
-        $crate::models::post::Post::get($pool, id)
+        // Test feeds belong to the seeded admin.
+        $crate::models::post::Post::get($pool, $crate::newtypes::UserId(1), id)
             .await
             .expect("should get post")
     }};
@@ -582,7 +622,9 @@ mod tests {
                     .await
                     .expect("post should exist")
             };
-            let got = Post::get(&pool, id).await.expect("get should succeed");
+            let got = Post::get(&pool, feed.user_id, id)
+                .await
+                .expect("get should succeed");
 
             assert_eq!(got.id, id);
             assert_eq!(got.feed_id, feed.id);
@@ -595,10 +637,10 @@ mod tests {
             assert!(!got.is_archived);
 
             // Deleting the feed cascades to the post, so a follow-up get fails.
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
-            assert!(Post::get(&pool, id).await.is_err());
+            assert!(Post::get(&pool, feed.user_id, id).await.is_err());
         }
 
         #[tokio::test]
@@ -626,7 +668,7 @@ mod tests {
             };
             assert_eq!(count, 1);
 
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
         }
@@ -660,7 +702,7 @@ mod tests {
             };
             assert_eq!(count, 3);
 
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
         }
@@ -685,7 +727,7 @@ mod tests {
             assert!(updated.bookmarked);
             assert!(updated.is_read);
 
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
         }
@@ -708,23 +750,25 @@ mod tests {
 
             // Repeated toggles: each count must include its own update.
             for _ in 0..3 {
-                let (post, count) = Post::update_with_unread_count(&pool, mark_read(true))
-                    .await
-                    .expect("should mark post read");
+                let (post, count) =
+                    Post::update_with_unread_count(&pool, feed.user_id, mark_read(true))
+                        .await
+                        .expect("should mark post read");
                 assert!(post.is_read);
                 assert_eq!(count, 1);
 
-                let (post, count) = Post::update_with_unread_count(&pool, mark_read(false))
-                    .await
-                    .expect("should mark post unread");
+                let (post, count) =
+                    Post::update_with_unread_count(&pool, feed.user_id, mark_read(false))
+                        .await
+                        .expect("should mark post unread");
                 assert!(!post.is_read);
                 assert_eq!(count, 2);
             }
 
-            Feed::delete(&pool, other_feed.id)
+            Feed::delete(&pool, other_feed.user_id, other_feed.id)
                 .await
                 .expect("should delete feed");
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
         }
@@ -739,7 +783,7 @@ mod tests {
             assert!(Post::toggle_is_read(&pool, id).await.unwrap().is_read);
             assert!(!Post::toggle_is_read(&pool, id).await.unwrap().is_read);
 
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
         }
@@ -794,11 +838,11 @@ mod tests {
 
             // Other tests share the database, so rows besides ours may expire:
             // assert on our posts, not exact counts.
-            assert!(Post::expire_read(&pool, 5).await.unwrap() >= 1);
-            assert!(Post::expire_unread(&pool, 5).await.unwrap() >= 1);
-            assert!(Post::get(&pool, read_id).await.is_err());
-            assert!(Post::get(&pool, unread_id).await.is_err());
-            assert!(Post::get(&pool, kept_id).await.is_ok());
+            assert!(Post::expire_read(&pool, feed.user_id, 5).await.unwrap() >= 1);
+            assert!(Post::expire_unread(&pool, feed.user_id, 5).await.unwrap() >= 1);
+            assert!(Post::get(&pool, feed.user_id, read_id).await.is_err());
+            assert!(Post::get(&pool, feed.user_id, unread_id).await.is_err());
+            assert!(Post::get(&pool, feed.user_id, kept_id).await.is_ok());
 
             // Re-fetch: the expired urls must stay gone — their rows are deleted,
             // so only the expired_posts filter can block them — while a fresh url
@@ -817,7 +861,7 @@ mod tests {
             assert_eq!(inserted.len(), 1);
             assert_eq!(inserted[0].url.as_deref(), Some(fresh_url.as_str()));
 
-            Feed::delete(&pool, feed.id)
+            Feed::delete(&pool, feed.user_id, feed.id)
                 .await
                 .expect("should delete feed");
         }

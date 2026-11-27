@@ -1,4 +1,5 @@
 import { useContext, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { AuthContext } from "../context/AuthContext";
 import { Account } from "../components/settings/Account";
 import { Appearance } from "../components/settings/Appearance";
@@ -6,10 +7,12 @@ import { Credentials } from "../components/settings/Credentials";
 import { Feeds } from "../components/settings/Feeds";
 import { Folders } from "../components/settings/Folders";
 import { General } from "../components/settings/General";
+import { Instance } from "../components/settings/Instance";
 import { Integrations } from "../components/settings/Integrations";
 import { Opml } from "../components/settings/Opml";
 import { Shortcuts } from "../components/settings/Shortcuts";
 import { Webhooks } from "../components/settings/Webhooks";
+import { useAccount } from "../hooks/useAccount";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { version } from "../../package.json";
 
@@ -23,12 +26,21 @@ type Tab =
   | "folders"
   | "webhooks"
   | "opml"
-  | "account";
+  | "account"
+  | "instance";
 
 export function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("general");
+  // `?tab=account` opens the account section, e.g. after linking OIDC.
+  const [tab, setTab] = useState<Tab>(() =>
+    new URLSearchParams(location.search).get("tab") === "account" ? "account" : "general",
+  );
   const isMobile = useIsMobile();
   const { signedIn } = useContext(AuthContext);
+  // Desktop is signed in through its key and has no account to manage.
+  const showAccount = signedIn && !isTauri();
+  const { data: account } = useAccount();
+  // Desktop acts as user 1, an admin, so it gets the tab too.
+  const showAdmin = account?.is_admin === true;
 
   return (
     <div className="settings-page">
@@ -89,13 +101,24 @@ export function SettingsPage() {
         >
           Import / Export
         </button>
-        {signedIn && (
+        {showAccount && (
           <button
             className={`settings-tab${tab === "account" ? " active" : ""}`}
             onClick={() => setTab("account")}
           >
             Account
           </button>
+        )}
+        {showAdmin && (
+          <>
+            <div className="settings-tab-group">Admin</div>
+            <button
+              className={`settings-tab${tab === "instance" ? " active" : ""}`}
+              onClick={() => setTab("instance")}
+            >
+              Instance
+            </button>
+          </>
         )}
       </div>
 
@@ -109,7 +132,8 @@ export function SettingsPage() {
         {tab === "folders" && <Folders />}
         {tab === "webhooks" && <Webhooks />}
         {tab === "opml" && <Opml />}
-        {tab === "account" && signedIn && <Account />}
+        {tab === "account" && showAccount && <Account />}
+        {tab === "instance" && showAdmin && <Instance />}
         <div className="settings-app-version">v{version}</div>
       </div>
     </div>

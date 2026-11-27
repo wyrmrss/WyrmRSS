@@ -1,7 +1,8 @@
 use database::{
     DatabasePool,
     models::host_credential::HostCredential,
-    utils::settings::RuntimeSettings,
+    newtypes::UserId,
+    utils::runtime_settings::RuntimeSettings,
 };
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::Sender;
@@ -29,14 +30,13 @@ pub struct WyrmContext {
 }
 
 impl WyrmContext {
-    /// Builds an HTTP client from the runtime settings and stored host
-    /// credentials, for feed discovery and icon fetches.
-    pub async fn http(&self) -> WyrmResult<HttpClient> {
-        let host_credentials = HostCredential::get_all(&self.db_pool).await?;
-        HttpClient::new(
-            &HttpConfig::from(&*self.runtime_settings.read()?),
-            host_credentials,
-        )
+    /// Builds an HTTP client from the runtime settings and the user's
+    /// host credentials, for feed discovery and icon fetches.
+    pub async fn http(&self, user_id: UserId) -> WyrmResult<HttpClient> {
+        let user_creds = HostCredential::get_all_for_user(&self.db_pool, user_id).await?;
+        let http = HttpClient::new(&HttpConfig::from(&*self.runtime_settings.read()?))?;
+
+        Ok(http.with_credentials(user_creds))
     }
 
     /// Builds a feed URL resolver from the runtime settings.

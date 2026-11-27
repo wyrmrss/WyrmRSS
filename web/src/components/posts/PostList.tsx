@@ -12,6 +12,7 @@ import { usePostNavigation } from "../../hooks/usePostNavigation";
 import { useFeedMap } from "../../hooks/useFeedMap";
 import { useFlattenedPages } from "../../hooks/useFlattenedPages";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { formatCountdown, useManualRefreshCountdown } from "../../hooks/useManualRefreshCountdown";
 import { DensityToggle } from "./DensityToggle";
 import { PostItem } from "./PostItem";
 import { PostsToolbar } from "./PostsToolbar";
@@ -36,6 +37,8 @@ export function PostList() {
   const { data: feeds } = useFeeds();
 
   const pollFeeds = usePollFeeds();
+  const refreshSecsLeft = useManualRefreshCountdown();
+  const canRefresh = refreshSecsLeft === 0;
 
   const isMobile = useIsMobile();
 
@@ -111,8 +114,8 @@ export function PostList() {
         <button
           className="posts-refresh-btn"
           onClick={() => pollFeeds.mutate()}
-          disabled={pollFeeds.isPending || isRefetching || isLoading}
-          title="Refresh"
+          disabled={!canRefresh || pollFeeds.isPending || isRefetching || isLoading}
+          title={canRefresh ? "Refresh" : `Refresh in ${formatCountdown(refreshSecsLeft)}`}
         >
           <TbRefresh className={pollFeeds.isPending || isRefetching ? "spinning" : ""} />
         </button>
@@ -125,7 +128,7 @@ export function PostList() {
         isFetchingNextPage={isFetchingNextPage}
         groupDate={groupDate}
         emptyMessage={unreadOnly && !debouncedSearch ? "All caught up" : "No posts"}
-        onRefresh={isMobile ? () => pollFeeds.mutate() : undefined}
+        onRefresh={isMobile && canRefresh ? () => pollFeeds.mutate() : undefined}
         refreshing={pollFeeds.isPending}
         openPostId={activePostId}
         onScrolledPast={settings?.read_mode === "on_scroll" ? markReadOnScroll : undefined}

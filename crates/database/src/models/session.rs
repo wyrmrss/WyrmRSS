@@ -1,4 +1,4 @@
-use crate::{DatabasePool, schema::sessions};
+use crate::{DatabasePool, newtypes::UserId, schema::sessions};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
@@ -8,6 +8,8 @@ use wyrm_utils::{error::WyrmError, result::WyrmResult};
 #[diesel(table_name = sessions)]
 #[diesel(check_for_backend(crate::Backend))]
 pub struct Session {
+    /// The user this session logs in as.
+    pub user_id: UserId,
     pub token_hash: String,
     pub expires_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
@@ -79,12 +81,30 @@ impl Session {
             .map_err(WyrmError::from)?;
         Ok(())
     }
+
+    /// Deletes the user's sessions except the one with `keep_token_hash`.
+    pub async fn delete_others(
+        pool: &DatabasePool,
+        user_id: UserId,
+        keep_token_hash: &str,
+    ) -> WyrmResult<()> {
+        let mut conn = pool.get().await?;
+        diesel::delete(
+            sessions::table
+                .filter(sessions::user_id.eq(user_id))
+                .filter(sessions::token_hash.ne(keep_token_hash)),
+        )
+        .execute(&mut conn)
+        .await?;
+        Ok(())
+    }
 }
 
-#[derive(Default, Insertable)]
+#[derive(Insertable)]
 #[diesel(table_name = crate::schema::sessions)]
 #[diesel(check_for_backend(crate::Backend))]
 pub struct SessionInsertForm {
+    pub user_id: UserId,
     pub token_hash: String,
     pub expires_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
@@ -93,6 +113,7 @@ pub struct SessionInsertForm {
 #[cfg(all(test, feature = "postgres"))]
 mod tests {
     use super::*;
+    use crate::models::local_user::{LocalUser, LocalUserInsertForm};
     use chrono::TimeDelta;
     use wyrm_utils::error::DatabaseError;
 
@@ -115,6 +136,7 @@ mod tests {
     fn insert_form(token_hash: &str, expires_at: DateTime<Utc>) -> SessionInsertForm {
         SessionInsertForm {
             token_hash: token_hash.to_owned(),
+            user_id: UserId(1),
             expires_at,
             last_seen_at: hours_from_now(0),
         }
@@ -217,6 +239,66 @@ mod tests {
         );
 
         Session::delete(&pool, &active)
+            .await
+            .expect("delete should succeed");
+    }
+
+    /// Own users, so other tests' sessions for user 1 aren't deleted.
+    async fn create_user(pool: &DatabasePool, label: &str) -> LocalUser {
+        LocalUser::create(
+            pool,
+            LocalUserInsertForm {
+                username: unique_token_hash(label).replace('-', "_"),
+                password_hash: "hash".into(),
+            },
+        )
+        .await
+        .expect("create user should succeed")
+    }
+
+    #[tokio::test]
+    async fn delete_others_keeps_the_given_session_and_other_users_sessions() {
+        let pool = crate::setup_test_db().await;
+        let alice = create_user(&pool, "alice").await;
+        let bob = create_user(&pool, "bob").await;
+        let kept = unique_token_hash("kept");
+        let other_device = unique_token_hash("other-device");
+        let bobs_session = unique_token_hash("bobs-session");
+
+        for (user_id, token_hash) in [
+            (alice.id, &kept),
+            (alice.id, &other_device),
+            (bob.id, &bobs_session),
+        ] {
+            Session::create(
+                &pool,
+                SessionInsertForm {
+                    user_id,
+                    ..insert_form(token_hash, hours_from_now(1))
+                },
+            )
+            .await
+            .expect("create should succeed");
+        }
+
+        Session::delete_others(&pool, alice.id, &kept)
+            .await
+            .expect("delete_others should succeed");
+
+        for (token_hash, should_remain) in
+            [(&kept, true), (&other_device, false), (&bobs_session, true)]
+        {
+            let found = Session::find_active(&pool, token_hash)
+                .await
+                .expect("find should succeed");
+            assert_eq!(found.is_some(), should_remain, "session {token_hash}");
+        }
+
+        // Deleting the users also deletes their sessions.
+        LocalUser::delete(&pool, alice.id)
+            .await
+            .expect("delete should succeed");
+        LocalUser::delete(&pool, bob.id)
             .await
             .expect("delete should succeed");
     }

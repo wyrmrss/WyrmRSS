@@ -1,8 +1,12 @@
+pub mod account;
 pub mod archive;
 pub mod auth;
 pub mod feeds;
 pub mod folders;
 pub mod host_credentials;
+pub mod instance;
+#[cfg(feature = "oidc")]
+pub mod oidc;
 pub mod posts;
 pub mod settings;
 pub mod shortcuts;

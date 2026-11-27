@@ -7,6 +7,7 @@ use database::models::shortcut::{
     Shortcuts,
 };
 use serde::Deserialize;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_utils::{
     error::{DatabaseError, WyrmError},
     result::WyrmResult,
@@ -19,6 +20,7 @@ pub struct UpdateShortcut {
 }
 
 pub async fn update(
+    user: AuthenticatedUser,
     path: Path<String>,
     Json(data): Json<UpdateShortcut>,
     ctx: Data<WyrmContext>,
@@ -38,7 +40,8 @@ pub async fn update(
         return Err(WyrmError::InvalidInput("key cannot be empty".into()));
     }
 
-    let current = Shortcuts::from_overrides(ShortcutOverride::get_all(&ctx.db_pool).await?);
+    let current =
+        Shortcuts::from_overrides(ShortcutOverride::get_all(&ctx.db_pool, user.id).await?);
 
     // Re-saving an action's own key is fine, only another action's key conflicts.
     if let Some(owner) = current.action_for_key(&key)
@@ -52,18 +55,23 @@ pub async fn update(
     ShortcutOverride::create(
         &ctx.db_pool,
         ShortcutOverrideInsertForm {
+            user_id: user.id,
             shortcut_action,
             key,
         },
     )
     .await?;
 
-    let overrides = ShortcutOverride::get_all(&ctx.db_pool).await?;
+    let overrides = ShortcutOverride::get_all(&ctx.db_pool, user.id).await?;
 
     Ok(Json(Shortcuts::from_overrides(overrides)))
 }
 
-pub async fn delete(path: Path<String>, ctx: Data<WyrmContext>) -> WyrmResult<Json<Shortcuts>> {
+pub async fn delete(
+    user: AuthenticatedUser,
+    path: Path<String>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<Shortcuts>> {
     ctx.deny_in_demo()?;
 
     let action = path.into_inner();
@@ -73,9 +81,9 @@ pub async fn delete(path: Path<String>, ctx: Data<WyrmContext>) -> WyrmResult<Js
         .parse::<ShortcutAction>()
         .map_err(|_| WyrmError::Database(DatabaseError::NotFound))?;
 
-    ShortcutOverride::delete(&ctx.db_pool, action.as_str()).await?;
+    ShortcutOverride::delete(&ctx.db_pool, user.id, action.as_str()).await?;
 
-    let overrides = ShortcutOverride::get_all(&ctx.db_pool).await?;
+    let overrides = ShortcutOverride::get_all(&ctx.db_pool, user.id).await?;
 
     let shortcuts = Shortcuts::from_overrides(overrides);
 

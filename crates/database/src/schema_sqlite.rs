@@ -42,6 +42,7 @@ diesel::table! {
         last_error -> Nullable<Text>,
         etag -> Nullable<Text>,
         last_modified -> Nullable<Text>,
+        user_id -> Integer,
     }
 }
 
@@ -49,6 +50,7 @@ diesel::table! {
     folders (id) {
         id -> Integer,
         name -> Text,
+        user_id -> Integer,
     }
 }
 
@@ -63,6 +65,37 @@ diesel::table! {
         name -> Text,
         secret -> Text,
         created_at -> TimestamptzSqlite,
+        user_id -> Integer,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use crate::models::instance::RegistrationModeMapping;
+
+    local_instance (is_singleton) {
+        is_singleton -> Bool,
+        is_setup -> Bool,
+        registration_mode -> RegistrationModeMapping,
+        feed_poll_interval_secs -> Integer,
+        http_timeout_secs -> Integer,
+        http_connect_timeout_secs -> Integer,
+        http_retries -> Integer,
+        http_user_agent -> Nullable<Text>,
+        rsshub_instance -> Nullable<Text>,
+        manual_poll_interval_secs -> Integer,
+    }
+}
+
+diesel::table! {
+    local_users (id) {
+        id -> Integer,
+        username -> Text,
+        password_hash -> Nullable<Text>,
+        oidc_subject -> Nullable<Text>,
+        is_admin -> Bool,
+        created_at -> TimestamptzSqlite,
+        last_manual_poll_at -> Nullable<TimestamptzSqlite>,
     }
 }
 
@@ -76,6 +109,7 @@ diesel::table! {
         description -> Nullable<Text>,
         content -> Nullable<Text>,
         archived_at -> TimestamptzSqlite,
+        user_id -> Integer,
     }
 }
 
@@ -103,6 +137,7 @@ diesel::table! {
         token_hash -> Text,
         expires_at -> TimestamptzSqlite,
         last_seen_at -> TimestamptzSqlite,
+        user_id -> Integer,
     }
 }
 
@@ -110,24 +145,19 @@ diesel::table! {
     use diesel::sql_types::*;
     use crate::models::settings::ReadModeMapping;
 
-    settings (is_singleton) {
-        is_singleton -> Bool,
+    settings (user_id) {
+        user_id -> Integer,
         page_size -> Integer,
-        feed_poll_interval_secs -> Integer,
-        http_timeout -> Integer,
-        http_connect_timeout -> Integer,
-        http_retries -> Integer,
-        http_user_agent -> Nullable<Text>,
         read_mode -> ReadModeMapping,
         expire_read_after_days -> Nullable<Integer>,
         expire_unread_after_days -> Nullable<Integer>,
         read_delay_secs -> Integer,
-        rsshub_instance -> Nullable<Text>,
     }
 }
 
 diesel::table! {
-    shortcut_overrides (shortcut_action) {
+    shortcut_overrides (user_id, shortcut_action) {
+        user_id -> Integer,
         shortcut_action -> Text,
         key -> Text,
     }
@@ -144,6 +174,7 @@ diesel::table! {
         kind -> WebhookKindMapping,
         payload_template -> Nullable<Text>,
         created_at -> TimestamptzSqlite,
+        user_id -> Integer,
     }
 }
 
@@ -161,6 +192,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     feeds,
     folders,
     host_credentials,
+    local_instance,
+    local_users,
     post_archive,
     posts,
     sessions,

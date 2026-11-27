@@ -8,9 +8,12 @@ use database::{
     newtypes::{FeedId, Filters},
 };
 use serde::Deserialize;
+use std::time::Duration;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_rss::{
     discover::{self, FetchedUrl},
     icon::ensure_feed_icon,
+    worker::WorkerCommand,
 };
 use wyrm_utils::result::WyrmResult;
 
@@ -43,12 +46,13 @@ pub struct UpdateFeed {
 }
 
 pub async fn create(
+    user: AuthenticatedUser,
     Json(data): Json<CreateFeed>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<Feed>> {
     ctx.deny_in_demo()?;
 
-    let http = ctx.http().await?;
+    let http = ctx.http(user.id).await?;
     let url_resolver = ctx.url_resolver()?;
 
     let url = url_resolver.normalize(&data.url)?;
@@ -58,6 +62,7 @@ pub async fn create(
     let feed = Feed::create(
         &ctx.db_pool,
         FeedInsertForm {
+            user_id: user.id,
             title: data.title,
             url,
             ttl: data.ttl,
@@ -74,17 +79,31 @@ pub async fn create(
         ensure_feed_icon(&ctx.db_pool, &http, &url_resolver, &feed, parsed).await;
     }
 
+    // Polls the new feed now so its posts are there when the frontend refetches.
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = ctx
+        .worker_tx
+        .send(WorkerCommand::PollFeed {
+            reply: tx,
+            feed: feed.clone(),
+        })
+        .await;
+
+    let http_timeout = ctx.runtime_settings.read()?.http_timeout_secs;
+    let _ = tokio::time::timeout(Duration::from_secs(http_timeout as u64), rx).await;
+
     Ok(Json(feed))
 }
 
 pub async fn update(
+    user: AuthenticatedUser,
     path: Path<FeedId>,
     Json(data): Json<UpdateFeed>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<Feed>> {
     ctx.deny_in_demo()?;
 
-    let http = ctx.http().await?;
+    let http = ctx.http(user.id).await?;
     let url_resolver = ctx.url_resolver()?;
 
     let id = path.into_inner();
@@ -93,7 +112,7 @@ pub async fn update(
     // url field, so an unchanged one must pass through without a network
     // round-trip, otherwise a TTL/title edit would fail while the feed's
     // site happens to be down.
-    let feed = Feed::get(&ctx.db_pool, id).await?;
+    let feed = Feed::get(&ctx.db_pool, user.id, id).await?;
     let (url, fetched) = match data.url {
         Some(u) if u == feed.url => (Some(feed.url.clone()), FetchedUrl::None),
         Some(u) => {
@@ -122,6 +141,7 @@ pub async fn update(
         &ctx.db_pool,
         FeedUpdateForm {
             id,
+            user_id: user.id,
             title: data.title,
             url,
             ttl: data.ttl,
@@ -152,9 +172,13 @@ pub async fn update(
     Ok(Json(feed))
 }
 
-pub async fn delete(path: Path<FeedId>, ctx: Data<WyrmContext>) -> WyrmResult<Json<Feed>> {
+pub async fn delete(
+    user: AuthenticatedUser,
+    path: Path<FeedId>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<Feed>> {
     ctx.deny_in_demo()?;
 
-    let feed = Feed::delete(&ctx.db_pool, path.into_inner()).await?;
+    let feed = Feed::delete(&ctx.db_pool, user.id, path.into_inner()).await?;
     Ok(Json(feed))
 }

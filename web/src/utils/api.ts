@@ -31,10 +31,15 @@ function buildUrl(base: string, params: Record<string, string | undefined>): str
 
 export const ENDPOINTS = {
   auth: {
-    verify: () => `${apiBase()}/auth/verify`,
     status: () => `${apiBase()}/auth/status`,
-    login: () => `${apiBase()}/auth/oidc/login`,
+    login: () => `${apiBase()}/auth/login`,
+    register: () => `${apiBase()}/auth/register`,
+    oidcLogin: () => `${apiBase()}/auth/oidc/login`,
     logout: () => `${apiBase()}/auth/logout`,
+  },
+  instance: {
+    get: () => `${apiBase()}/instance`,
+    setup: () => `${apiBase()}/instance/setup`,
   },
   feeds: {
     list: () => `${apiBase()}/feeds`,
@@ -72,6 +77,14 @@ export const ENDPOINTS = {
     create: () => `${apiBase()}/folders`,
     update: (id: FolderId) => `${apiBase()}/folders/${id}`,
     delete: (id: FolderId) => `${apiBase()}/folders/${id}`,
+  },
+  admin: {
+    instance: () => `${apiBase()}/admin/instance`,
+  },
+  account: {
+    get: () => `${apiBase()}/account`,
+    password: () => `${apiBase()}/account/password`,
+    delete: () => `${apiBase()}/account`,
   },
   settings: {
     get: () => `${apiBase()}/settings`,

@@ -7,12 +7,14 @@ use database::{
     models::{
         archive::PostArchive,
         post::{MarkReadTarget, Post},
+        settings::Settings,
     },
     newtypes::{FeedId, FolderId, PostId},
     utils::pagination::{PagedResponse, PaginationCursor},
     views::{archive::get_post_archive_insert_form, post::PostQuery},
 };
 use serde::Deserialize;
+use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_utils::result::WyrmResult;
 
 #[derive(Deserialize, ts_rs::TS)]
@@ -26,39 +28,53 @@ pub struct ListPosts {
     pub search: Option<String>,
 }
 
-pub async fn get(path: Path<PostId>, ctx: Data<WyrmContext>) -> WyrmResult<Json<Post>> {
+pub async fn get(
+    user: AuthenticatedUser,
+    path: Path<PostId>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<Post>> {
     let post_id = path.into_inner();
-    let post = Post::get(&ctx.db_pool, post_id).await?;
+    let post = Post::get(&ctx.db_pool, user.id, post_id).await?;
     Ok(Json(post))
 }
 
-pub async fn archive(path: Path<PostId>, ctx: Data<WyrmContext>) -> WyrmResult<Json<PostArchive>> {
+pub async fn archive(
+    user: AuthenticatedUser,
+    path: Path<PostId>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<Json<PostArchive>> {
     let post_id = path.into_inner();
-    let form = get_post_archive_insert_form(&ctx.db_pool, post_id).await?;
+    let form = get_post_archive_insert_form(&ctx.db_pool, user.id, post_id).await?;
     let archived = PostArchive::create(&ctx.db_pool, form).await?;
     Ok(Json(archived))
 }
 
-pub async fn unarchive(path: Path<PostId>, ctx: Data<WyrmContext>) -> WyrmResult<HttpResponse> {
+pub async fn unarchive(
+    user: AuthenticatedUser,
+    path: Path<PostId>,
+    ctx: Data<WyrmContext>,
+) -> WyrmResult<HttpResponse> {
     let post_id = path.into_inner();
-    PostArchive::delete(&ctx.db_pool, post_id).await?;
+    PostArchive::delete(&ctx.db_pool, user.id, post_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
 pub async fn mark_as_read(
+    user: AuthenticatedUser,
     Json(target): Json<MarkReadTarget>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<HttpResponse> {
-    let _ = Post::mark_read(&ctx.db_pool, target).await?;
+    let _ = Post::mark_read(&ctx.db_pool, user.id, target).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
 pub async fn list(
+    user: AuthenticatedUser,
     query: Query<ListPosts>,
     ctx: Data<WyrmContext>,
 ) -> WyrmResult<Json<PagedResponse<Vec<Post>>>> {
     let query = query.into_inner();
-    let page_size = ctx.runtime_settings.read()?.page_size;
+    let page_size = Settings::get(&ctx.db_pool, user.id).await?.page_size;
     let page = PostQuery {
         cursor: query.page,
         feed_id: query.feed_id,
@@ -67,7 +83,7 @@ pub async fn list(
         unread_only: query.unread_only.or(Some(true)),
         search: query.search,
     }
-    .list(&ctx.db_pool, page_size)
+    .list(&ctx.db_pool, user.id, page_size)
     .await?;
     Ok(Json(page))
 }

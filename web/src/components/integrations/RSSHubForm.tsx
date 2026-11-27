@@ -1,12 +1,13 @@
 import { type SubmitEvent, useState } from "react";
 import { TbToggleLeft, TbToggleRightFilled } from "react-icons/tb";
-import { useUpdateSettings } from "../../hooks/useSettings";
+import { useUpdateLocalInstance } from "../../hooks/useLocalInstance";
 
-export function RSSHubForm({ initialInstance }: { initialInstance: string }) {
+/** `canEdit` is false for non-admins, who see the instance's RSSHub setup read-only. */
+export function RSSHubForm({ initialInstance, canEdit }: { initialInstance: string; canEdit: boolean }) {
   const [enabled, setEnabled] = useState(initialInstance !== "");
   // Kept while toggled off so re-enabling before saving restores it.
   const [instance, setInstance] = useState(initialInstance);
-  const update = useUpdateSettings();
+  const update = useUpdateLocalInstance();
 
   function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,6 +22,7 @@ export function RSSHubForm({ initialInstance }: { initialInstance: string }) {
         <input
           type="checkbox"
           checked={enabled}
+          disabled={!canEdit}
           onChange={(e) => setEnabled(e.target.checked)}
         />
         {enabled ? <TbToggleRightFilled aria-hidden /> : <TbToggleLeft aria-hidden />}
@@ -32,6 +34,7 @@ export function RSSHubForm({ initialInstance }: { initialInstance: string }) {
             id="rsshub-instance"
             type="url"
             required
+            disabled={!canEdit}
             value={instance}
             onChange={(e) => setInstance(e.target.value)}
             placeholder="https://rsshub.app"
@@ -42,13 +45,15 @@ export function RSSHubForm({ initialInstance }: { initialInstance: string }) {
         Feeds added as rsshub:// links pause while this is off.
       </p>
       <div className="settings-form-actions">
-        <button className="btn btn-primary" type="submit" disabled={update.isPending}>
+        <button className="btn btn-primary" type="submit" disabled={!canEdit || update.isPending}>
           {update.isPending ? "Saving…" : "Save"}
         </button>
         {update.isSuccess && <span className="settings-status settings-status-ok">Saved.</span>}
         {update.isError && <span className="settings-status settings-status-err">Failed to save.</span>}
       </div>
-      <p className="settings-hint">Changes take effect immediately.</p>
+      <p className="settings-hint">
+        {canEdit ? "Changes take effect immediately." : "Only admins can change this."}
+      </p>
     </form>
   );
 }
