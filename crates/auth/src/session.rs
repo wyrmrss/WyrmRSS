@@ -12,6 +12,7 @@ use database::{
         local_user::LocalUser,
         session::{Session, SessionInsertForm},
     },
+    newtypes::UserId,
 };
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -138,6 +139,20 @@ impl SessionManager {
         }
         // Already expired, so the browser deletes it.
         Ok(self.cookie(String::new(), DateTime::UNIX_EPOCH))
+    }
+
+    /// Deletes the user's sessions except the one the request's cookie belongs to.
+    /// Does nothing when the request has no session cookie.
+    pub async fn revoke_others(
+        &self,
+        pool: &DatabasePool,
+        req: &HttpRequest,
+        user_id: UserId,
+    ) -> WyrmResult<()> {
+        if let Some(cookie) = req.cookie(self.cookie_name()) {
+            Session::delete_others(pool, user_id, &token_hash(cookie.value())).await?;
+        }
+        Ok(())
     }
 
     pub fn check_csrf(&self, req: &HttpRequest) -> WyrmResult<()> {

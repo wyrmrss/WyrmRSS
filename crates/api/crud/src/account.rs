@@ -98,9 +98,11 @@ pub async fn register(
 }
 
 pub async fn update_password(
+    req: HttpRequest,
     user: AuthenticatedUser,
     Json(data): Json<UpdatePassword>,
     ctx: Data<WyrmContext>,
+    auth: Data<Auth>,
 ) -> WyrmResult<HttpResponse> {
     ctx.deny_in_demo()?;
 
@@ -141,6 +143,11 @@ pub async fn update_password(
         },
     )
     .await?;
+
+    // Sign out the user's other sessions and keep this one.
+    auth.sessions()
+        .revoke_others(&ctx.db_pool, &req, user.id)
+        .await?;
 
     Ok(HttpResponse::NoContent().finish())
 }
