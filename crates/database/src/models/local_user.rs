@@ -5,7 +5,7 @@ use crate::{
     newtypes::UserId,
     schema::{self, local_users},
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use diesel::{Selectable, deserialize::Queryable, prelude::*};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use wyrm_utils::{
@@ -27,6 +27,8 @@ pub struct LocalUser {
     /// Whether user is admin.
     pub is_admin: bool,
     pub created_at: DateTime<Utc>,
+    /// When the user last started a manual refresh, for the rate limit.
+    pub last_manual_poll_at: Option<DateTime<Utc>>,
 }
 
 impl LocalUser {
@@ -131,6 +133,28 @@ impl LocalUser {
         })
         .await
     }
+
+    pub async fn try_start_manual_poll(
+        pool: &DatabasePool,
+        user_id: UserId,
+        interval_secs: i32,
+    ) -> WyrmResult<bool> {
+        let mut conn = pool.get().await?;
+        let cutoff = Utc::now() - Duration::seconds(interval_secs as i64);
+
+        let target = local_users::table.find(user_id).filter(
+            local_users::last_manual_poll_at
+                .is_null()
+                .or(local_users::last_manual_poll_at.lt(cutoff)),
+        );
+
+        let updated = diesel::update(target)
+            .set(local_users::last_manual_poll_at.eq(Utc::now()))
+            .execute(&mut conn)
+            .await?;
+
+        Ok(updated == 1)
+    }
 }
 
 #[derive(Insertable)]
@@ -221,6 +245,56 @@ mod tests {
             ),
             "second user with the same username should be refused"
         );
+
+        LocalUser::delete(&pool, user.id)
+            .await
+            .expect("should delete user");
+    }
+
+    #[tokio::test]
+    async fn manual_poll_is_refused_within_the_interval() {
+        let pool = setup_test_db().await;
+        let user = create_user(&pool, unique_username())
+            .await
+            .expect("create should succeed");
+
+        let first = LocalUser::try_start_manual_poll(&pool, user.id, 60)
+            .await
+            .expect("first poll should run the query");
+        assert!(first, "first manual poll should be allowed");
+
+        let second = LocalUser::try_start_manual_poll(&pool, user.id, 60)
+            .await
+            .expect("second poll should run the query");
+        assert!(!second, "second manual poll within 60s should be refused");
+
+        let last = LocalUser::get(&pool, user.id)
+            .await
+            .expect("get should succeed")
+            .last_manual_poll_at;
+        assert!(last.is_some(), "allowed poll should record its time");
+
+        LocalUser::delete(&pool, user.id)
+            .await
+            .expect("should delete user");
+    }
+
+    #[tokio::test]
+    async fn manual_poll_with_zero_interval_is_always_allowed() {
+        let pool = setup_test_db().await;
+        let user = create_user(&pool, unique_username())
+            .await
+            .expect("create should succeed");
+
+        for attempt in 1..=3 {
+            let allowed = LocalUser::try_start_manual_poll(&pool, user.id, 0)
+                .await
+                .expect("poll should run the query");
+            assert!(
+                allowed,
+                "manual poll {attempt} should be allowed with no limit"
+            );
+        }
 
         LocalUser::delete(&pool, user.id)
             .await

@@ -12,6 +12,7 @@ const REGISTRATION_OPTIONS: { value: RegistrationMode; label: string }[] = [
 function LocalInstanceForm({ initial }: { initial: LocalInstanceResponse }) {
   const [registrationMode, setRegistrationMode] = useState(initial.registration_mode);
   const [pollInterval, setPollInterval] = useState(String(initial.feed_poll_interval_secs));
+  const [manualPollInterval, setManualPollInterval] = useState(String(initial.manual_poll_interval_secs));
   const [httpTimeout, setHttpTimeout] = useState(String(initial.http_timeout_secs));
   const [connectTimeout, setConnectTimeout] = useState(String(initial.http_connect_timeout_secs));
   const [retries, setRetries] = useState(String(initial.http_retries));
@@ -25,6 +26,7 @@ function LocalInstanceForm({ initial }: { initial: LocalInstanceResponse }) {
     update.mutate({
       registration_mode: showRegistration ? registrationMode : undefined,
       feed_poll_interval_secs: parseInt(pollInterval),
+      manual_poll_interval_secs: parseInt(manualPollInterval),
       http_timeout_secs: parseInt(httpTimeout),
       http_connect_timeout_secs: parseInt(connectTimeout),
       http_retries: parseInt(retries),
@@ -65,6 +67,11 @@ function LocalInstanceForm({ initial }: { initial: LocalInstanceResponse }) {
         <label>Poll interval (s)</label>
         <input type="number" min={60} value={pollInterval} onChange={(e) => setPollInterval(e.target.value)} required />
       </div>
+      <div className="settings-field">
+        <label>Manual refresh limit (s)</label>
+        <input type="number" min={0} value={manualPollInterval} onChange={(e) => setManualPollInterval(e.target.value)} required />
+      </div>
+      <p className="settings-hint">How often each user can refresh their feeds.</p>
 
       <h2 className="settings-section-title">HTTP</h2>
       <div className="settings-field">

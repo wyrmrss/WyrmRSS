@@ -1,5 +1,6 @@
 pub mod discover;
 pub mod filter;
+mod guard;
 pub mod http;
 pub mod icon;
 pub mod opml;

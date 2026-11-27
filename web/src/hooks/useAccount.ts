@@ -3,7 +3,7 @@ import { deleteAccount, getAccount, updatePassword } from "../api/account";
 import type { DeleteAccount } from "../types/DeleteAccount";
 import type { UpdatePassword } from "../types/UpdatePassword";
 
-const accountKey = ["account"];
+export const accountKey = ["account"];
 
 export function useAccount() {
   return useQuery({

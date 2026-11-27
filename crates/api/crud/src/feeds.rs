@@ -8,10 +8,12 @@ use database::{
     newtypes::{FeedId, Filters},
 };
 use serde::Deserialize;
+use std::time::Duration;
 use wyrm_auth::authenticated_user::AuthenticatedUser;
 use wyrm_rss::{
     discover::{self, FetchedUrl},
     icon::ensure_feed_icon,
+    worker::WorkerCommand,
 };
 use wyrm_utils::result::WyrmResult;
 
@@ -76,6 +78,19 @@ pub async fn create(
     if let Some(parsed) = fetched.parsed_feed() {
         ensure_feed_icon(&ctx.db_pool, &http, &url_resolver, &feed, parsed).await;
     }
+
+    // Polls the new feed now so its posts are there when the frontend refetches.
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = ctx
+        .worker_tx
+        .send(WorkerCommand::PollFeed {
+            reply: tx,
+            feed: feed.clone(),
+        })
+        .await;
+
+    let http_timeout = ctx.runtime_settings.read()?.http_timeout_secs;
+    let _ = tokio::time::timeout(Duration::from_secs(http_timeout as u64), rx).await;
 
     Ok(Json(feed))
 }

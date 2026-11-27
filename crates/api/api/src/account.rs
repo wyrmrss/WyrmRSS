@@ -16,5 +16,6 @@ pub async fn get(
         has_password: local_user.password_hash.is_some(),
         oidc_linked: local_user.oidc_subject.is_some(),
         is_admin: local_user.is_admin,
+        last_manual_poll_at: local_user.last_manual_poll_at,
     }))
 }

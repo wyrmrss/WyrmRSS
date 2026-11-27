@@ -40,6 +40,7 @@ pub struct InstanceSetup {
 pub struct UpdateLocalInstance {
     registration_mode: Option<RegistrationMode>,
     feed_poll_interval_secs: Option<i32>,
+    manual_poll_interval_secs: Option<i32>,
     http_timeout_secs: Option<i32>,
     http_connect_timeout_secs: Option<i32>,
     http_retries: Option<i32>,
@@ -66,6 +67,7 @@ pub async fn update(
     let form = LocalInstanceUpdateForm {
         registration_mode: data.registration_mode,
         feed_poll_interval_secs: data.feed_poll_interval_secs,
+        manual_poll_interval_secs: data.manual_poll_interval_secs,
         http_timeout_secs: data.http_timeout_secs,
         http_connect_timeout_secs: data.http_connect_timeout_secs,
         http_retries: data.http_retries,

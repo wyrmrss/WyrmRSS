@@ -18,6 +18,10 @@ registration_mode: RegistrationMode,
  */
 feed_poll_interval_secs: number, 
 /**
+ * Minimum time between a user's manual refreshes, in seconds.
+ */
+manual_poll_interval_secs: number, 
+/**
  * Total timeout for a feed HTTP request, in seconds.
  */
 http_timeout_secs: number, 

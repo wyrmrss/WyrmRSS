@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFeed, deleteFeed, getFeedIcon, getFeeds, pollFeeds, updateFeed } from "../api/feeds";
 import { evictFeedIconIfUrlChanged, feedIconKey, feedKeys, setFeedPauseState } from "../cache/feeds";
 import { postKeys } from "../cache/posts";
+import { accountKey } from "./useAccount";
 import { folderKeys } from "./useFolders";
 import { useLocalInstance } from "./useLocalInstance";
 import type { CreateFeed } from "../types/CreateFeed";
@@ -58,17 +59,14 @@ export function useCreateFeed() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateFeed) => createFeed(body),
+    // The server polls the new feed before replying, so its posts and unread
+    // count are usually there already.
     onSuccess: (_feed, body) => {
       qc.invalidateQueries({ queryKey: feedKeys.all });
+      qc.invalidateQueries({ queryKey: postKeys.all });
       // Submitting a folder name can resolve-or-create a folder server-side;
       // without one the folder list can't have changed.
       if (body.folder) qc.invalidateQueries({ queryKey: folderKeys.all });
-      const refresh = () => {
-        qc.invalidateQueries({ queryKey: postKeys.all });
-        // Unread counts live on the feeds query; refetch once the poll lands.
-        qc.invalidateQueries({ queryKey: feedKeys.all });
-      };
-      pollFeeds().then(refresh).catch(refresh);
     },
   });
 }
@@ -115,6 +113,8 @@ export function usePollFeeds() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: feedKeys.all });
       qc.invalidateQueries({ queryKey: postKeys.all });
+      // Picks up the new last_manual_poll_at, or the real one after a 429.
+      qc.invalidateQueries({ queryKey: accountKey });
     },
   });
 }

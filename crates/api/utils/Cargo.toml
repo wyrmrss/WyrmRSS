@@ -8,8 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-tokio = { workspace = true }
 actix-web = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
 serde = { workspace = true }
 ts-rs = { workspace = true }
 database = { path = "../../database", default-features = false }

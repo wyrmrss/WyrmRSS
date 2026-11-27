@@ -103,6 +103,8 @@ pub enum WyrmError {
     StartupConfigError(#[from] config::ConfigError),
     #[error("invalid input: {0}")]
     InvalidInput(String),
+    #[error("too many requests: {0}")]
+    TooManyRequests(String),
 }
 
 impl From<reqwest::Error> for WyrmError {
@@ -167,6 +169,7 @@ impl WyrmError {
             WyrmError::WebhookTemplate(msg) => msg,
             WyrmError::EmptyFolderName => "folder name cannot be empty",
             WyrmError::FeedDiscovery(msg) => msg,
+            WyrmError::TooManyRequests(msg) => msg,
             WyrmError::Auth(AuthError::RegistrationClosed) => "account registration is closed",
             WyrmError::Auth(AuthError::AdminRequired) => "operation requires admin privileges",
             WyrmError::Auth(AuthError::InvalidAuthConfig(_)) => {
@@ -243,6 +246,7 @@ impl error::ResponseError for WyrmError {
             WyrmError::WebhookTemplate(_) => StatusCode::BAD_REQUEST,
             WyrmError::EmptyFolderName => StatusCode::BAD_REQUEST,
             WyrmError::FeedDiscovery(_) => StatusCode::BAD_REQUEST,
+            WyrmError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             WyrmError::Auth(AuthError::RegistrationClosed) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::AdminRequired) => StatusCode::FORBIDDEN,
             WyrmError::Auth(AuthError::InvalidSetupToken) => StatusCode::FORBIDDEN,
