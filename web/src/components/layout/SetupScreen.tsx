@@ -63,7 +63,7 @@ export function SetupScreen() {
             spellCheck={false}
             autoFocus
           />
-          <small>Printed in the server log when Wyrm starts, for example in <code>docker logs wyrm</code>.</small>
+          <small>Printed in the server log when Wyrm starts, for example in <code>docker logs wyrm-server</code>.</small>
         </label>
 
         <label className="setup-field">

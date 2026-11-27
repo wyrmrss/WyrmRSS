@@ -18,7 +18,7 @@ use actix_web::HttpRequest;
 use database::DatabasePool;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use wyrm_utils::{config::WyrmStartupConfig, error::AuthError, result::WyrmResult};
+use wyrm_utils::{config::WyrmStartupConfig, result::WyrmResult};
 
 /// Sign-in methods enabled on this instance, as reported to the frontend.
 #[derive(Serialize, ts_rs::TS)]
@@ -73,7 +73,7 @@ impl Auth {
     pub fn oidc(&self) -> WyrmResult<&Oidc> {
         self.oidc
             .as_ref()
-            .ok_or_else(|| AuthError::AuthMethodDisabled("oidc".into()).into())
+            .ok_or_else(|| wyrm_utils::error::AuthError::AuthMethodDisabled("oidc".into()).into())
     }
 
     pub fn sessions(&self) -> &SessionManager {
