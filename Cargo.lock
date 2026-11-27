@@ -268,7 +268,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "api_api"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "actix-web",
  "api_utils",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "api_crud"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "actix-web",
  "api_utils",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "api_routes"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "actix-web",
  "api_api",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "api_utils"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "actix-web",
  "chrono",
@@ -517,9 +517,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.12.1"
+version = "1.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+checksum = "776dfebd015e2d8732c684a2c71003674ccb49457b539b9e82151ba38e96dd7c"
 
 [[package]]
 name = "bytestring"
@@ -962,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "database"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "chrono",
  "diesel",
@@ -3675,7 +3675,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "actix-web",
  "api_routes",
@@ -4919,7 +4919,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "wyrm-rss"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4943,7 +4943,7 @@ dependencies = [
 
 [[package]]
 name = "wyrm_auth"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "actix-web",
  "api_utils",
@@ -4965,7 +4965,7 @@ dependencies = [
 
 [[package]]
 name = "wyrm_utils"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "actix-web",
  "config",
@@ -4987,7 +4987,7 @@ dependencies = [
 
 [[package]]
 name = "wyrm_webhook"
-version = "0.39.1"
+version = "0.40.0"
 dependencies = [
  "chrono",
  "database",
