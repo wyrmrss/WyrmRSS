@@ -339,7 +339,7 @@ fn parse_allowed_subjects(value: &str) -> WyrmResult<Vec<String>> {
 }
 
 fn validate_url(value: &str) -> WyrmResult<reqwest::Url> {
-    let url = reqwest::Url::parse(value).map_err(|_| invalid_config("invalid URL"))?;
+    let url = reqwest::Url::parse(value).map_err(|_| invalid_config("invalid url"))?;
     if (url.scheme() != "https" && !(url.scheme() == "http" && is_loopback(&url)))
         || !url.username().is_empty()
         || url.password().is_some()

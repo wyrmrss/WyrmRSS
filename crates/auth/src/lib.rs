@@ -1,4 +1,5 @@
-//! Authentication for the shared instance; reader data is shared by all users.
+//! Authentication: password and OIDC sign-in, sessions and CSRF checks, the
+//! desktop key, the setup token, and the middleware for protected routes.
 pub mod authenticated_user;
 mod desktop_key;
 #[cfg(feature = "oidc")]
